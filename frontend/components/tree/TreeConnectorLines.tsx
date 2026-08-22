@@ -5,11 +5,25 @@ export function TreeConnectorLines({ connections, width, height }: TreeConnector
     <svg
       width={width}
       height={height}
-      className="rounded-xl border border-dashed border-border text-muted"
+      viewBox={`0 0 ${width} ${height}`}
+      className="pointer-events-none absolute inset-0"
     >
-      <text x="12" y="24" className="fill-current text-sm">
-        TreeConnectorLines stub — Member 4 ({connections.length} links)
-      </text>
+      {connections.map((conn, i) => {
+        const midY = (conn.from.y + conn.to.y) / 2;
+        const pathData = `M ${conn.from.x} ${conn.from.y} L ${conn.from.x} ${midY} L ${conn.to.x} ${midY} L ${conn.to.x} ${conn.to.y}`;
+        
+        return (
+          <path
+            key={i}
+            d={pathData}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1.5}
+            strokeLinecap="round"
+            className="text-border"
+          />
+        );
+      })}
     </svg>
   );
 }
