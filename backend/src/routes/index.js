@@ -1,13 +1,15 @@
 const express = require("express");
 const healthRoutes = require("./health.routes");
 const authRoutes = require("./auth.routes");
+const userRoutes = require("./user.routes");
+const workspaceRoutes = require("./workspace.routes");
 
 const router = express.Router();
 
 router.use("/health", healthRoutes);
 router.use("/auth", authRoutes);
-// router.use("/users", require("./user.routes"));         // Member 3
-// router.use("/workspaces", require("./workspace.routes")); // Member 3
+router.use("/users", userRoutes);
+router.use("/workspaces", workspaceRoutes);
 // router.use("/workspaces/:id/tree", require("./tree.routes")); // Member 4 (mounted via workspace routes)
 // router.use("/tree-nodes", require("./tree.routes"));    // Member 4
 // router.use("/workspaces/:id/tasks", require("./task.routes")); // Member 5
