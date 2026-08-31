@@ -1,0 +1,628 @@
+openapi: 3.0.3
+info:
+  title: CollabBoard API
+  description: API for the CollabBoard frontend (No DB)
+  version: 1.0.0
+servers:
+  - url: http://localhost:4000/api
+    description: Local server
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    SuccessEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+    ErrorEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: array
+              items:
+                type: object
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        avatarColor:
+          type: string
+    Workspace:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        memberIds:
+          type: array
+          items:
+            type: string
+        color:
+          type: string
+    TreeNode:
+      type: object
+      properties:
+        id:
+          type: string
+        workspaceId:
+          type: string
+        parentId:
+          type: string
+          nullable: true
+        name:
+          type: string
+        completion:
+          type: integer
+    Task:
+      type: object
+      properties:
+        id:
+          type: string
+        workspaceId:
+          type: string
+        treeNodeId:
+          type: string
+        column:
+          type: string
+          enum: [todo, in_progress, review, done]
+        title:
+          type: string
+        description:
+          type: string
+        priority:
+          type: string
+          enum: [low, medium, high, urgent]
+        memberIds:
+          type: array
+          items:
+            type: string
+        startDate:
+          type: string
+          format: date-time
+        dueDate:
+          type: string
+          format: date-time
+        completion:
+          type: integer
+    Message:
+      type: object
+      properties:
+        id:
+          type: string
+        taskId:
+          type: string
+        authorId:
+          type: string
+        text:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    Attachment:
+      type: object
+      properties:
+        id:
+          type: string
+        taskId:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+          enum: [image, pdf, doc, link]
+        url:
+          type: string
+        addedBy:
+          type: string
+    GanttRow:
+      type: object
+      properties:
+        taskId:
+          type: string
+        leftPercent:
+          type: number
+        widthPercent:
+          type: number
+security:
+  - bearerAuth: []
+paths:
+  /health:
+    get:
+      summary: Health check
+      security: []
+      responses:
+        '200':
+          description: OK
+  /auth/register:
+    post:
+      summary: Register a new user
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                email: { type: string }
+                password: { type: string }
+                avatarColor: { type: string }
+      responses:
+        '201':
+          description: Created
+  /auth/login:
+    post:
+      summary: Login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email: { type: string }
+                password: { type: string }
+      responses:
+        '200':
+          description: Success
+  /auth/me:
+    get:
+      summary: Get current user
+      responses:
+        '200':
+          description: Success
+  /auth/logout:
+    post:
+      summary: Logout
+      responses:
+        '200':
+          description: Success
+  /users:
+    get:
+      summary: List users
+      responses:
+        '200':
+          description: Success
+  /users/{id}:
+    get:
+      summary: Get user by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+  /workspaces:
+    get:
+      summary: List workspaces
+      responses:
+        '200':
+          description: Success
+    post:
+      summary: Create workspace
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                description: { type: string }
+                color: { type: string }
+      responses:
+        '201':
+          description: Created
+  /workspaces/{id}:
+    get:
+      summary: Get workspace
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+    patch:
+      summary: Update workspace
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                description: { type: string }
+                color: { type: string }
+      responses:
+        '200':
+          description: Success
+    delete:
+      summary: Delete workspace
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+  /workspaces/{id}/members:
+    post:
+      summary: Add member
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userId: { type: string }
+      responses:
+        '200':
+          description: Success
+  /workspaces/{id}/members/{userId}:
+    delete:
+      summary: Remove member
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+  /workspaces/{id}/tree:
+    get:
+      summary: List tree nodes
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+    post:
+      summary: Create tree node
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                parentId: { type: string, nullable: true }
+                name: { type: string }
+                completion: { type: integer }
+      responses:
+        '201':
+          description: Created
+  /tree-nodes/{nodeId}:
+    get:
+      summary: Get tree node
+      parameters:
+        - name: nodeId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+    patch:
+      summary: Update tree node
+      parameters:
+        - name: nodeId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                parentId: { type: string, nullable: true }
+                name: { type: string }
+                completion: { type: integer }
+      responses:
+        '200':
+          description: Success
+    delete:
+      summary: Delete tree node
+      parameters:
+        - name: nodeId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+  /workspaces/{id}/tasks:
+    get:
+      summary: List tasks
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: treeNode
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: column
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+    post:
+      summary: Create task
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                treeNodeId: { type: string }
+                column: { type: string }
+                title: { type: string }
+                description: { type: string }
+                priority: { type: string }
+                memberIds:
+                  type: array
+                  items:
+                    type: string
+                startDate: { type: string }
+                dueDate: { type: string }
+                completion: { type: integer }
+      responses:
+        '201':
+          description: Created
+  /tasks/{taskId}:
+    get:
+      summary: Get task
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+    patch:
+      summary: Update task
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                treeNodeId: { type: string }
+                column: { type: string }
+                title: { type: string }
+                description: { type: string }
+                priority: { type: string }
+                memberIds:
+                  type: array
+                  items:
+                    type: string
+                startDate: { type: string }
+                dueDate: { type: string }
+                completion: { type: integer }
+      responses:
+        '200':
+          description: Success
+    delete:
+      summary: Delete task
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+  /tasks/{taskId}/move:
+    patch:
+      summary: Move task
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                column: { type: string }
+      responses:
+        '200':
+          description: Success
+  /workspaces/{id}/gantt:
+    get:
+      summary: Get gantt
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+  /tasks/{taskId}/messages:
+    get:
+      summary: List messages
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+    post:
+      summary: Create message
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                text: { type: string }
+      responses:
+        '201':
+          description: Created
+  /messages/{messageId}:
+    delete:
+      summary: Delete message
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+  /tasks/{taskId}/attachments:
+    get:
+      summary: List attachments
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+    post:
+      summary: Create attachment
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                type: { type: string }
+                url: { type: string }
+      responses:
+        '201':
+          description: Created
+  /attachments/{attachmentId}:
+    delete:
+      summary: Delete attachment
+      parameters:
+        - name: attachmentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
