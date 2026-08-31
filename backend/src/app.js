@@ -24,6 +24,10 @@ app.use(morgan("dev"));
 // API routes
 app.use("/api", apiRouter);
 
+// Swagger Docs
+const setupSwagger = require("./docs/swagger");
+setupSwagger(app);
+
 // 404 for unknown routes
 app.use(notFound);
 
