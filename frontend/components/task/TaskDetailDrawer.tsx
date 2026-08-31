@@ -9,8 +9,8 @@ import { AvatarGroup } from "@/components/ui/AvatarGroup";
 import { MessageChannel } from "@/components/task/MessageChannel";
 import { AttachmentList } from "@/components/task/AttachmentList";
 import { formatDate, getUsers } from "@/lib/format";
-import { users } from "@/mocks/data";
-import type { Task } from "@/types";
+import { apiFetch, getToken } from "@/lib/api";
+import type { Task, User } from "@/types";
 
 type DrawerTab = "messages" | "attachments";
 
@@ -26,12 +26,27 @@ export function TaskDetailDrawer({ task, open, onClose }: TaskDetailDrawerProps)
   const closeRef = useRef<HTMLButtonElement>(null);
   const [tab, setTab] = useState<DrawerTab>("messages");
   const [displayedTask, setDisplayedTask] = useState<Task | null>(task);
+  const [allUsers, setAllUsers] = useState<User[]>([]);
   const visible = Boolean(open && task);
 
   useEffect(() => {
     if (task) {
       setDisplayedTask(task);
       setTab("messages");
+      
+      const loadUsers = async () => {
+        const token = getToken();
+        if (!token) return;
+        try {
+          const usrs = await apiFetch<User[]>("/api/users", { token });
+          setAllUsers(usrs);
+        } catch (err) {
+          console.error(err);
+        }
+      };
+      if (allUsers.length === 0) {
+        loadUsers();
+      }
     }
   }, [task]);
 
@@ -49,7 +64,7 @@ export function TaskDetailDrawer({ task, open, onClose }: TaskDetailDrawerProps)
   }, [visible, onClose]);
 
   const members = displayedTask
-    ? getUsers(users, displayedTask.memberIds)
+    ? getUsers(allUsers, displayedTask.memberIds)
     : [];
 
   return (

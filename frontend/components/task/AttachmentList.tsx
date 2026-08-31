@@ -1,7 +1,10 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { FileText, Image, Link as LinkIcon } from "lucide-react";
 import { getUser } from "@/lib/format";
-import { attachments, users } from "@/mocks/data";
-import type { Attachment } from "@/types";
+import { apiFetch, getToken } from "@/lib/api";
+import type { Attachment, User } from "@/types";
 import type { AttachmentListProps } from "@/types/components";
 
 function TypeIcon({ type }: { type: Attachment["type"] }) {
@@ -13,7 +16,34 @@ function TypeIcon({ type }: { type: Attachment["type"] }) {
 }
 
 export function AttachmentList({ taskId }: AttachmentListProps) {
-  const items = attachments.filter((attachment) => attachment.taskId === taskId);
+  const [items, setItems] = useState<Attachment[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const token = getToken();
+    if (!token) return;
+
+    const loadData = async () => {
+      try {
+        const [attachments, allUsers] = await Promise.all([
+          apiFetch<Attachment[]>(`/api/tasks/${taskId}/attachments`, { token }),
+          apiFetch<User[]>("/api/users", { token }),
+        ]);
+        setItems(attachments);
+        setUsers(allUsers);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, [taskId]);
+
+  if (loading) {
+    return <p className="text-sm text-muted">Loading attachments...</p>;
+  }
 
   if (items.length === 0) {
     return <p className="text-sm text-muted">No attachments.</p>;

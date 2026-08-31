@@ -1,11 +1,67 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import { formatDate, getUser } from "@/lib/format";
-import { messages, users } from "@/mocks/data";
+import { apiFetch, getToken } from "@/lib/api";
 import type { MessageChannelProps } from "@/types/components";
+import type { Message, User } from "@/types";
 
 export function MessageChannel({ taskId }: MessageChannelProps) {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [text, setText] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  const loadData = async () => {
+    const token = getToken();
+    if (!token) return;
+    try {
+      const [msgs, usrs] = await Promise.all([
+        apiFetch<Message[]>(`/api/tasks/${taskId}/messages`, { token }),
+        apiFetch<User[]>("/api/users", { token }),
+      ]);
+      setMessages(msgs);
+      setUsers(usrs);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, [taskId]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!text.trim() || submitting) return;
+    const token = getToken();
+    if (!token) return;
+
+    setSubmitting(true);
+    try {
+      await apiFetch(`/api/tasks/${taskId}/messages`, {
+        method: "POST",
+        body: JSON.stringify({ text }),
+        token,
+      });
+      setText("");
+      await loadData();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (loading) {
+    return <div className="text-sm text-muted">Loading messages...</div>;
+  }
+
   const thread = messages
-    .filter((message) => message.taskId === taskId)
     .slice()
     .sort(
       (a, b) =>
@@ -56,13 +112,17 @@ export function MessageChannel({ taskId }: MessageChannelProps) {
         )}
       </div>
 
-      <input
-        type="text"
-        disabled
-        placeholder="Coming in the backend phase"
-        aria-label="Message composer"
-        className="mt-3 w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-muted placeholder:text-muted disabled:cursor-not-allowed"
-      />
+      <form onSubmit={handleSubmit} className="mt-3 flex gap-2">
+        <input
+          type="text"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          disabled={submitting}
+          placeholder="Type a message..."
+          aria-label="Message composer"
+          className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-fg placeholder:text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:cursor-not-allowed"
+        />
+      </form>
     </div>
   );
 }

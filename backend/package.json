@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
-    "test": "jest --runInBand"
+    "test": "jest --runInBand",
+    "test:postman": "npx newman run ../postman/CollabBoard.postman_collection.json -e ../postman/CollabBoard.postman_environment.json"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

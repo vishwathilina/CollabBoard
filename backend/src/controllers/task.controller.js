@@ -4,7 +4,7 @@ const taskService = require("../services/task.service");
 function listTasks(req, res) {
   const { id } = req.params;
   const tasks = taskService.listTasks(id, req.query, req.user.id);
-  return sendSuccess(res, { tasks }, 200, { count: tasks.length });
+  return sendSuccess(res, tasks, 200, { count: tasks.length });
 }
 
 function createTask(req, res) {

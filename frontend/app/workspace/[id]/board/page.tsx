@@ -1,10 +1,11 @@
 "use client";
 
-import { use } from "react";
+import { useEffect, useState, use } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { KanbanBoard } from "@/components/board/KanbanBoard";
 import { TaskDetailDrawer } from "@/components/task/TaskDetailDrawer";
-import { tasks } from "@/mocks/data";
+import { apiFetch, getToken } from "@/lib/api";
+import type { Task } from "@/types";
 
 export default function BoardPage({
   params,
@@ -18,9 +19,23 @@ export default function BoardPage({
   const taskId = searchParams.get("task");
   const treeNodeId = searchParams.get("treeNode");
 
-  const foundTask = taskId
-    ? tasks.find((t) => t.id === taskId && t.workspaceId === id) ?? null
-    : null;
+  const [foundTask, setFoundTask] = useState<Task | null>(null);
+
+  useEffect(() => {
+    if (!taskId) {
+      setFoundTask(null);
+      return;
+    }
+    const token = getToken();
+    if (!token) return;
+
+    apiFetch<Task>(`/api/tasks/${taskId}`, { token })
+      .then(setFoundTask)
+      .catch((err) => {
+        console.error(err);
+        setFoundTask(null);
+      });
+  }, [taskId]);
 
   const handleClose = () => {
     const urlParams = new URLSearchParams();

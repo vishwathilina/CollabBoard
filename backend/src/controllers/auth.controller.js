@@ -15,7 +15,7 @@ async function login(req, res) {
 
 async function me(req, res) {
   const user = authService.getMe(req.user.id);
-  return sendSuccess(res, { user }, 200);
+  return sendSuccess(res, user, 200);
 }
 
 async function logout(req, res) {

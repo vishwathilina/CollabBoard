@@ -1,10 +1,11 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { tasks, users } from "@/mocks/data";
 import { KanbanColumn } from "./KanbanColumn";
 import { TaskCard } from "./TaskCard";
-import type { TaskColumn } from "@/types";
+import { apiFetch, getToken } from "@/lib/api";
+import type { TaskColumn, Task, User } from "@/types";
 
 const COLUMNS: { id: TaskColumn; title: string }[] = [
   { id: "todo", title: "To Do" },
@@ -16,15 +17,36 @@ const COLUMNS: { id: TaskColumn; title: string }[] = [
 export function KanbanBoard({ workspaceId }: { workspaceId: string }) {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const treeNodeId = searchParams.get("treeNode");
   const taskId = searchParams.get("task");
 
-  const boardTasks = tasks.filter((t) => {
-    if (t.workspaceId !== workspaceId) return false;
-    if (treeNodeId && t.treeNodeId !== treeNodeId) return false;
-    return true;
-  });
+  useEffect(() => {
+    const token = getToken();
+    if (!token) return;
+
+    const loadData = async () => {
+      try {
+        const query = treeNodeId ? `?treeNode=${treeNodeId}` : "";
+        const [fetchedTasks, fetchedUsers] = await Promise.all([
+          apiFetch<Task[]>(`/api/workspaces/${workspaceId}/tasks${query}`, { token }),
+          apiFetch<User[]>("/api/users", { token }),
+        ]);
+        setTasks(fetchedTasks);
+        setUsers(fetchedUsers);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, [workspaceId, treeNodeId]);
+
+  const boardTasks = tasks; // We already filter by treeNodeId via API if provided
 
   const clearFilter = () => {
     const params = new URLSearchParams();
