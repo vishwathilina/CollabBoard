@@ -1,16 +1,31 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { treeNodes } from "@/mocks/data";
 import { layoutTree } from "./tree-layout";
 import { TreeConnectorLines } from "./TreeConnectorLines";
 import { TreeNodeCard } from "./TreeNodeCard";
+import { apiFetch, getToken } from "@/lib/api";
 import type { TreeNode } from "@/types";
 
 export function WorkTree({ workspaceId }: { workspaceId: string }) {
   const router = useRouter();
+  const [nodes, setNodes] = useState<TreeNode[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const nodes = treeNodes.filter((n) => n.workspaceId === workspaceId);
+  useEffect(() => {
+    const token = getToken();
+    if (!token) return;
+    
+    apiFetch<TreeNode[]>(`/api/workspaces/${workspaceId}/tree`, { token })
+      .then(setNodes)
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [workspaceId]);
+
+  if (loading) {
+    return <div className="flex min-h-[60vh] items-center justify-center text-sm text-muted">Loading tree...</div>;
+  }
 
   if (nodes.length === 0) {
     return (

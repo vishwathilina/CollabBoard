@@ -4,7 +4,7 @@ const treeService = require("../services/tree.service");
 function listTree(req, res) {
   const { id } = req.params;
   const nodes = treeService.listTree(id, req.user.id);
-  return sendSuccess(res, { nodes }, 200, { count: nodes.length });
+  return sendSuccess(res, nodes, 200, { count: nodes.length });
 }
 
 function createNode(req, res) {

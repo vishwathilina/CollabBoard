@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { AppShell } from "@/components/layout/AppShell";
+import { ClientGuard } from "@/components/auth/ClientGuard";
 import "./globals.css";
 
 const inter = Inter({
@@ -21,7 +22,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.variable} ${inter.className} bg-bg text-fg antialiased`}>
-        <AppShell>{children}</AppShell>
+        <ClientGuard>
+          <AppShell>{children}</AppShell>
+        </ClientGuard>
       </body>
     </html>
   );
