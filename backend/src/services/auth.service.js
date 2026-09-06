@@ -5,13 +5,13 @@ const { signToken, EXPIRES_IN } = require("../utils/tokens");
 
 async function register({ name, email, password, avatarColor }) {
   const normalizedEmail = email.toLowerCase();
-  const existing = userRepo.findByEmail(normalizedEmail);
+  const existing = await userRepo.findByEmail(normalizedEmail);
   if (existing) {
     throw new AppError(409, "CONFLICT", `Email '${normalizedEmail}' is already registered.`);
   }
 
   const passwordHash = await bcrypt.hash(password, 10);
-  const user = userRepo.create({
+  const user = await userRepo.create({
     name,
     email: normalizedEmail,
     passwordHash,
@@ -26,7 +26,7 @@ async function register({ name, email, password, avatarColor }) {
 
 async function login({ email, password }) {
   const normalizedEmail = email.toLowerCase();
-  const user = userRepo.findByEmail(normalizedEmail);
+  const user = await userRepo.findByEmail(normalizedEmail);
   if (!user) {
     throw new AppError(401, "UNAUTHORIZED", "Invalid email or password.");
   }
@@ -42,12 +42,29 @@ async function login({ email, password }) {
   return { user: publicUser, token, expiresIn: EXPIRES_IN };
 }
 
-function getMe(userId) {
-  const user = userRepo.findById(userId);
+async function getMe(userId) {
+  const user = await userRepo.findById(userId);
   if (!user) {
     throw new AppError(404, "NOT_FOUND", `User '${userId}' was not found.`);
   }
   return userRepo.toPublic(user);
 }
 
-module.exports = { register, login, getMe };
+async function changePassword(userId, currentPassword, newPassword) {
+  const user = await userRepo.findById(userId);
+  if (!user) {
+    throw new AppError(404, "NOT_FOUND", "User not found.");
+  }
+
+  const match = await bcrypt.compare(currentPassword, user.passwordHash);
+  if (!match) {
+    throw new AppError(400, "BAD_REQUEST", "Incorrect current password.");
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, 10);
+  await userRepo.update(userId, { passwordHash });
+
+  return { success: true };
+}
+
+module.exports = { register, login, getMe, changePassword };
