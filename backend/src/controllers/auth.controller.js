@@ -14,7 +14,7 @@ async function login(req, res) {
 }
 
 async function me(req, res) {
-  const user = authService.getMe(req.user.id);
+  const user = await authService.getMe(req.user.id);
   return sendSuccess(res, user, 200);
 }
 
@@ -23,4 +23,10 @@ async function logout(req, res) {
   return sendSuccess(res, { loggedOut: true }, 200);
 }
 
-module.exports = { register, login, me, logout };
+async function changePassword(req, res) {
+  const { currentPassword, newPassword } = req.body;
+  const result = await authService.changePassword(req.user.id, currentPassword, newPassword);
+  return sendSuccess(res, result, 200);
+}
+
+module.exports = { register, login, me, logout, changePassword };

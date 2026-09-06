@@ -98,11 +98,13 @@ export function Sidebar() {
       <div className="border-t border-border p-3">
         {currentUser ? (
           <div className="flex items-center gap-2 rounded-lg px-2 py-1.5">
-            <Avatar user={currentUser} size="sm" />
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-fg">{currentUser.name}</p>
-              <p className="text-xs text-muted">Signed in</p>
-            </div>
+            <Link href="/profile" className="flex min-w-0 flex-1 items-center gap-2 hover:opacity-80">
+              <Avatar user={currentUser} size="sm" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-fg">{currentUser.name}</p>
+                <p className="text-xs text-muted">Signed in</p>
+              </div>
+            </Link>
             <button
               onClick={handleLogout}
               className="text-muted hover:text-fg ml-auto"

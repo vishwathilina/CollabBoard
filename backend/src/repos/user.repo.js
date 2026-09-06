@@ -1,42 +1,57 @@
-const { getStore } = require("../store/memory.store");
-const { nextId } = require("../store/ids");
+const { User } = require("../models/User");
+const { docToRecord } = require("./serialize");
 
 function toPublic(user) {
   if (!user) return null;
-  const { id, name, avatarColor, email } = user;
-  return { id, name, avatarColor, email };
+  const doc = docToRecord(user);
+  return {
+    id: doc.id,
+    name: doc.name,
+    email: doc.email,
+    avatarColor: doc.avatarColor,
+    orgRole: doc.orgRole,
+    title: doc.title,
+    bio: doc.bio,
+    avatarUrl: doc.avatarUrl,
+  };
 }
 
-function findById(id) {
-  const { users } = getStore();
-  return users.find((u) => u.id === id) || null;
+async function findById(id) {
+  const user = await User.findById(id);
+  return docToRecord(user);
 }
 
-function findByEmail(email) {
-  const { users } = getStore();
+async function findByEmail(email) {
   const normalized = email.toLowerCase();
-  return users.find((u) => u.email && u.email.toLowerCase() === normalized) || null;
+  const user = await User.findOne({ email: normalized });
+  return docToRecord(user);
 }
 
-function findAll() {
-  return getStore().users;
+async function findAll() {
+  const users = await User.find();
+  return users.map(docToRecord);
 }
 
-function findAllPublic() {
-  return findAll().map(toPublic);
+async function findAllPublic() {
+  const users = await User.find();
+  return users.map(docToRecord).map(toPublic);
 }
 
-function create({ name, email, passwordHash, avatarColor }) {
-  const { users } = getStore();
-  const user = {
-    id: nextId("user"),
+async function create({ name, email, passwordHash, avatarColor }) {
+  const normalized = email.toLowerCase();
+  const user = await User.create({
+    _id: `u-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     name,
-    email: email.toLowerCase(),
+    email: normalized,
     passwordHash,
     avatarColor: avatarColor || "#C6F135",
-  };
-  users.push(user);
-  return user;
+  });
+  return docToRecord(user);
+}
+
+async function update(id, data) {
+  const user = await User.findByIdAndUpdate(id, data, { new: true });
+  return docToRecord(user);
 }
 
 module.exports = {
@@ -46,4 +61,5 @@ module.exports = {
   findAll,
   findAllPublic,
   create,
+  update,
 };

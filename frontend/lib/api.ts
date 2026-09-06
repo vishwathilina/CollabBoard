@@ -6,16 +6,17 @@ interface FetchOptions extends RequestInit {
 
 export async function apiFetch<T>(path: string, options: FetchOptions = {}): Promise<T> {
   const { token, headers, ...rest } = options;
-  
-  // Only add Bearer token if it exists
-  const authHeader = token ? { Authorization: `Bearer ${token}` } : {};
+
+  const authHeader: Record<string, string> = token
+    ? { Authorization: `Bearer ${token}` }
+    : {};
 
   const response = await fetch(`${API_URL}${path}`, {
     ...rest,
     headers: {
       "Content-Type": "application/json",
       ...authHeader,
-      ...headers,
+      ...(headers as Record<string, string> | undefined),
     },
   });
 

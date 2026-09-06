@@ -8,10 +8,12 @@ import { Button } from "@/components/ui/Button";
 import { apiFetch, setToken } from "@/lib/api";
 import type { User } from "@/types";
 
-export default function LoginPage() {
+export default function RegisterPage() {
   const router = useRouter();
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [avatarColor, setAvatarColor] = useState("#C6F135");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -21,15 +23,15 @@ export default function LoginPage() {
     setError("");
 
     try {
-      const data = await apiFetch<{ user: User; token: string }>("/api/auth/login", {
+      const data = await apiFetch<{ user: User; token: string }>("/api/auth/register", {
         method: "POST",
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ name, email, password, avatarColor }),
       });
 
       setToken(data.token);
       router.push("/dashboard");
     } catch (err: any) {
-      setError(err.message || "Failed to log in");
+      setError(err.message || "Failed to register");
     } finally {
       setLoading(false);
     }
@@ -37,14 +39,32 @@ export default function LoginPage() {
 
   return (
     <>
-      <TopBar title="CollabBoard Login" />
-      <div className="flex h-full items-center justify-center bg-bg p-6">
+      <TopBar title="CollabBoard Register" />
+      <div className="flex h-full min-h-screen items-center justify-center bg-bg p-6">
         <div className="w-full max-w-sm rounded-xl border border-border bg-surface-2 p-8 shadow-sm">
           <h1 className="mb-6 text-center text-xl font-semibold text-fg">
-            Sign in to your account
+            Create an account
           </h1>
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label
+                htmlFor="name"
+                className="mb-1 block text-sm font-medium text-fg"
+              >
+                Name
+              </label>
+              <input
+                id="name"
+                type="text"
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg placeholder:text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                placeholder="Ada Lovelace"
+              />
+            </div>
+
             <div>
               <label
                 htmlFor="email"
@@ -78,7 +98,33 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg placeholder:text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
                 placeholder="••••••••"
+                minLength={8}
               />
+            </div>
+
+            <div>
+              <label
+                htmlFor="avatarColor"
+                className="mb-1 block text-sm font-medium text-fg"
+              >
+                Avatar Color
+              </label>
+              <div className="flex gap-2">
+                <input
+                  id="avatarColor"
+                  type="color"
+                  value={avatarColor}
+                  onChange={(e) => setAvatarColor(e.target.value)}
+                  className="h-9 w-12 rounded border border-border bg-surface p-1 cursor-pointer"
+                />
+                <input
+                  type="text"
+                  value={avatarColor}
+                  onChange={(e) => setAvatarColor(e.target.value)}
+                  pattern="^#[0-9A-Fa-f]{6}$"
+                  className="w-full flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg uppercase focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                />
+              </div>
             </div>
 
             {error && (
@@ -93,19 +139,17 @@ export default function LoginPage() {
               className="w-full justify-center"
               disabled={loading}
             >
-              {loading ? "Signing in..." : "Sign in"}
+              {loading ? "Creating account..." : "Register"}
             </Button>
           </form>
 
           <div className="mt-6 text-center text-sm text-muted">
             <p>
-              Don't have an account?{" "}
-              <Link href="/register" className="text-accent hover:underline">
-                Create one
+              Already have an account?{" "}
+              <Link href="/login" className="text-accent hover:underline">
+                Sign in
               </Link>
             </p>
-            <p className="mt-2">Demo accounts:</p>
-            <p>ada@collabboard.local / CollabBoard!1</p>
           </div>
         </div>
       </div>
