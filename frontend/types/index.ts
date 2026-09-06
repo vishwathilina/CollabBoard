@@ -1,7 +1,12 @@
 export interface User {
   id: string;
   name: string;
+  email: string;
   avatarColor: string; // hex, used when there is no photo
+  orgRole?: string;
+  title?: string;
+  bio?: string;
+  avatarUrl?: string;
 }
 
 export interface Attachment {

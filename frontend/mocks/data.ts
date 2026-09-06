@@ -10,14 +10,14 @@ import type {
 export const CURRENT_USER_ID = "u-ada";
 
 export const users: User[] = [
-  { id: "u-ada", name: "Ada Lovelace", avatarColor: "#C6F135" },
-  { id: "u-linus", name: "Linus Torvalds", avatarColor: "#5B8DEF" },
-  { id: "u-grace", name: "Grace Hopper", avatarColor: "#E879F9" },
-  { id: "u-alan", name: "Alan Turing", avatarColor: "#F59E0B" },
-  { id: "u-margaret", name: "Margaret Hamilton", avatarColor: "#34D399" },
-  { id: "u-dennis", name: "Dennis Ritchie", avatarColor: "#FB7185" },
-  { id: "u-barbara", name: "Barbara Liskov", avatarColor: "#818CF8" },
-  { id: "u-tim", name: "Tim Berners-Lee", avatarColor: "#22D3EE" },
+  { id: "u-ada", name: "Ada Lovelace", email: "ada@collabboard.local", avatarColor: "#C6F135" },
+  { id: "u-linus", name: "Linus Torvalds", email: "linus@collabboard.local", avatarColor: "#5B8DEF" },
+  { id: "u-grace", name: "Grace Hopper", email: "grace@collabboard.local", avatarColor: "#E879F9" },
+  { id: "u-alan", name: "Alan Turing", email: "alan@collabboard.local", avatarColor: "#F59E0B" },
+  { id: "u-margaret", name: "Margaret Hamilton", email: "margaret@collabboard.local", avatarColor: "#34D399" },
+  { id: "u-dennis", name: "Dennis Ritchie", email: "dennis@collabboard.local", avatarColor: "#FB7185" },
+  { id: "u-barbara", name: "Barbara Liskov", email: "barbara@collabboard.local", avatarColor: "#818CF8" },
+  { id: "u-tim", name: "Tim Berners-Lee", email: "tim@collabboard.local", avatarColor: "#22D3EE" },
 ];
 
 export const workspaces: Workspace[] = [
