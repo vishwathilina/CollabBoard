@@ -1,6 +1,6 @@
 # CollabBoard
 
-Full-stack collaborative workspace: Dashboard, Work Tree, Kanban Board, Task Detail, and Gantt. The **Next.js** frontend (`:3000`) talks to an **Express** REST API (`:4000`) backed by an in-memory store — no MongoDB or SQL. Data is seeded from the same records as `frontend/mocks/data.ts` and reloads on server restart.
+Full-stack collaborative workspace: Dashboard, Work Tree, Kanban Board, Task Detail, and Gantt. The **Next.js** frontend (`:3000`) talks to an **Express** REST API (`:4000`) backed by **MongoDB Atlas** via Mongoose. Public string ids (`u-ada`, `ws-website`, …) are preserved for demos.
 
 ## Architecture
 
@@ -15,19 +15,35 @@ flowchart LR
     Ctrl[controllers]
     Svc[services]
     Repos[repos]
-    Store[in-memory store]
+    Models[Mongoose models]
     JWT[auth middleware]
   end
+  Atlas[(MongoDB Atlas)]
   Pages --> ApiTs
   ApiTs -->|Bearer JWT| Routes
   Routes --> Ctrl
   Ctrl --> Svc
   Svc --> Repos
-  Repos --> Store
+  Repos --> Models
+  Models --> Atlas
   Routes --> JWT
 ```
 
-The backend is layered **routes → controllers → services → repos → in-memory store**. CORS allows `http://localhost:3000`. Auth uses **Bearer JWT** (stored in `localStorage` on the client) so Postman and the frontend share the same scheme.
+The backend is layered **routes → controllers → services → repos → Mongoose → Atlas**. CORS allows `http://localhost:3000`. Auth uses **Bearer JWT** (stored in `localStorage` on the client) so Postman and the frontend share the same scheme.
+
+### Embed vs reference
+
+| Thing | Decision | Why |
+|---|---|---|
+| Kanban columns | **Not a collection.** Frozen enum `todo \| in_progress \| review \| done` | Bounded, never grow |
+| Workspace members + **role** + visibility | **Embedded array** on Workspace | Tens of members; always loaded with workspace |
+| Tree nodes | **Own collection** | Nested; queried as a tree; developers see a subset |
+| Tasks | **Own collection** | Unbounded; edited/dragged constantly |
+| Task comments (`Message`) | **Own collection** | Grow without bound |
+| Workspace chat | **Own collection** | High write rate; independent of tasks |
+| Users | **Own collection** | Shared across workspaces; unique email |
+| Presence | **Not stored** (Socket.io memory) | Ephemeral |
+| Activity / audit | **Own collection** | “Ada moved task-12 to review” |
 
 ## Setup
 
@@ -37,17 +53,22 @@ Run the API and frontend in separate terminals.
 
 ```bash
 cd backend
+cp .env.example .env   # then set real MONGODB_URI (Atlas, DB name collabboard)
 npm install
+npm run seed           # upsert demo data into Atlas (idempotent)
 npm run dev
 ```
 
-Optional `.env` in `backend/` (defaults work for local dev):
+Required `.env` in `backend/` (never commit secrets):
 
-| Variable | Default |
+| Variable | Default / notes |
 |---|---|
 | `PORT` | `4000` |
 | `JWT_SECRET` | `replace-me-in-real-env` |
 | `CLIENT_ORIGIN` | `http://localhost:3000` |
+| `MONGODB_URI` | Atlas URI with `/collabboard?retryWrites=true&w=majority` |
+
+Data survives API restarts. Re-run `npm run seed` anytime to refresh demo ids (`u-ada`, `ws-website`, …).
 
 **Frontend** (`http://localhost:3000`):
 
@@ -73,7 +94,8 @@ cd backend && npm test
 | Layer | Tech |
 |---|---|
 | Frontend | Next.js 16 (App Router), TypeScript, Tailwind CSS, `lucide-react` — import alias `@/*` |
-| Backend | Node.js 20+, Express, JWT, Zod, repository pattern over in-memory store |
+| Backend | Node.js 20+, Express, JWT, Zod, Mongoose → MongoDB Atlas |
+| Database | MongoDB Atlas (`collabboard`) |
 | API contract | OpenAPI 3.0, Swagger UI, Postman collection |
 
 Frontend HTTP client: `frontend/lib/api.ts`.
@@ -96,7 +118,7 @@ All JSON responses use a uniform envelope:
 
 **Resources:** CRUD for workspaces, tree nodes, tasks, messages, and attachment metadata. Tasks move between four frozen Kanban columns via `PATCH /tasks/:taskId/move`. Gantt rows are **derived** from `startDate` / `dueDate` (`leftPercent`, `widthPercent`) — not stored. Workspace-scoped mutations require membership. Input is validated with Zod at the route edge.
 
-**Health:** `GET /api/health` reports `store: "memory"`.
+**Health:** `GET /api/health` reports `store: "mongo"` and mongoose connection state.
 
 Seed ids match the frontend mocks (`task-01`, `ws-website`, …).
 
@@ -123,4 +145,4 @@ Import the collection and environment, select **CollabBoard Local**, run **Auth 
 
 ## Limitations
 
-Process memory is volatile — restarting the API reloads seed data. Out of scope for this phase: MongoDB/SQL, Socket.io / live presence, multipart file uploads (attachments are URL + type + name metadata only), and Next.js `app/api` routes (Express is the API).
+Jest still resets the legacy in-memory store (`memory.store.js`) until Member 8 moves tests to `mongodb-memory-server` — expect test failures against Mongo repos. Out of scope until later members: Socket.io / live presence, UploadThing uploads, RBAC UI, and Next.js `app/api` routes (Express is the API).
