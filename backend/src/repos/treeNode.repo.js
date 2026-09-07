@@ -1,24 +1,57 @@
+const mongoose = require("mongoose");
+const { TreeNode } = require("../models/TreeNode");
+const { Task } = require("../models/Task");
+const { docToRecord } = require("./serialize");
 const { getStore } = require("../store/memory.store");
 const { nextId } = require("../store/ids");
 
-function findById(id) {
+function isMongoConnected() {
+  return mongoose.connection && mongoose.connection.readyState === 1;
+}
+
+async function findById(id) {
+  if (isMongoConnected()) {
+    const node = await TreeNode.findById(id);
+    return docToRecord(node);
+  }
   const { treeNodes } = getStore();
-  return treeNodes.find((n) => n.id === id) || null;
+  const found = treeNodes.find((n) => n.id === id);
+  return found ? { ...found } : null;
 }
 
-function findByWorkspace(workspaceId) {
-  return getStore().treeNodes.filter((n) => n.workspaceId === workspaceId);
+async function findByWorkspace(workspaceId) {
+  if (isMongoConnected()) {
+    const nodes = await TreeNode.find({ workspaceId });
+    return nodes.map(docToRecord);
+  }
+  return getStore().treeNodes
+    .filter((n) => n.workspaceId === workspaceId)
+    .map((n) => ({ ...n }));
 }
 
-function findChildren(parentId) {
-  return getStore().treeNodes.filter((n) => n.parentId === parentId);
+async function findChildren(parentId) {
+  if (isMongoConnected()) {
+    const nodes = await TreeNode.find({ parentId });
+    return nodes.map(docToRecord);
+  }
+  return getStore().treeNodes
+    .filter((n) => n.parentId === parentId)
+    .map((n) => ({ ...n }));
 }
 
-function hasChildren(nodeId) {
+async function hasChildren(nodeId) {
+  if (isMongoConnected()) {
+    const count = await TreeNode.countDocuments({ parentId: nodeId });
+    return count > 0;
+  }
   return getStore().treeNodes.some((n) => n.parentId === nodeId);
 }
 
-function hasTasks(nodeId) {
+async function hasTasks(nodeId) {
+  if (isMongoConnected()) {
+    const count = await Task.countDocuments({ treeNodeId: nodeId });
+    return count > 0;
+  }
   return getStore().tasks.some((t) => t.treeNodeId === nodeId);
 }
 
@@ -26,15 +59,24 @@ function hasTasks(nodeId) {
  * Collect all descendant ids recursively (BFS) for a given node.
  * Does NOT include the node itself.
  */
-function getDescendantIds(nodeId) {
-  const { treeNodes } = getStore();
+async function getDescendantIds(nodeId) {
+  let allNodes = [];
+  if (isMongoConnected()) {
+    const target = await TreeNode.findById(nodeId);
+    if (!target) return new Set();
+    const nodes = await TreeNode.find({ workspaceId: target.workspaceId });
+    allNodes = nodes.map(docToRecord);
+  } else {
+    allNodes = getStore().treeNodes;
+  }
+
   const descendants = new Set();
   const stack = [nodeId];
   const visited = new Set();
   visited.add(nodeId);
   while (stack.length) {
     const current = stack.pop();
-    for (const node of treeNodes) {
+    for (const node of allNodes) {
       if (node.parentId === current && !visited.has(node.id)) {
         descendants.add(node.id);
         visited.add(node.id);
@@ -45,34 +87,59 @@ function getDescendantIds(nodeId) {
   return descendants;
 }
 
-function create({ workspaceId, parentId, name, completion }) {
+async function create({ workspaceId, parentId, name, completion }) {
+  const id = nextId("treeNode");
+  const normalizedParent = parentId === undefined ? null : parentId;
+  const initialCompletion = completion !== undefined ? completion : 0;
+
+  if (isMongoConnected()) {
+    const created = await TreeNode.create({
+      _id: id,
+      workspaceId,
+      parentId: normalizedParent,
+      name,
+      completion: initialCompletion,
+    });
+    return docToRecord(created);
+  }
+
   const { treeNodes } = getStore();
   const node = {
-    id: nextId("treeNode"),
+    id,
     workspaceId,
-    parentId: parentId === undefined ? null : parentId,
+    parentId: normalizedParent,
     name,
-    completion: completion !== undefined ? completion : 0,
+    completion: initialCompletion,
   };
   treeNodes.push(node);
-  return node;
+  return { ...node };
 }
 
-function update(id, patch) {
-  const node = findById(id);
+async function update(id, patch) {
+  if (isMongoConnected()) {
+    const updated = await TreeNode.findByIdAndUpdate(id, patch, { new: true });
+    return docToRecord(updated);
+  }
+
+  const node = getStore().treeNodes.find((n) => n.id === id);
   if (!node) return null;
   if (patch.name !== undefined) node.name = patch.name;
   if (patch.parentId !== undefined) node.parentId = patch.parentId;
   if (patch.completion !== undefined) node.completion = patch.completion;
-  return node;
+  return { ...node };
 }
 
-function remove(id) {
+async function remove(id) {
+  if (isMongoConnected()) {
+    const deleted = await TreeNode.findByIdAndDelete(id);
+    return docToRecord(deleted);
+  }
+
   const store = getStore();
   const idx = store.treeNodes.findIndex((n) => n.id === id);
   if (idx === -1) return null;
   const [deleted] = store.treeNodes.splice(idx, 1);
-  return deleted;
+  return { ...deleted };
 }
 
 module.exports = {

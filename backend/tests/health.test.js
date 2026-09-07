@@ -13,7 +13,7 @@ describe("GET /api/health", () => {
     expect(res.body.success).toBe(true);
     expect(res.body.data.status).toBe("ok");
     expect(typeof res.body.data.uptime).toBe("number");
-    expect(res.body.data.store).toBe("memory");
+    expect(["memory", "mongo"]).toContain(res.body.data.store);
     expect(new Date(res.body.data.timestamp).toISOString()).toBe(res.body.data.timestamp);
   });
 

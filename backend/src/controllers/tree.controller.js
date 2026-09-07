@@ -1,34 +1,34 @@
 const { sendSuccess } = require("../utils/apiResponse");
 const treeService = require("../services/tree.service");
 
-function listTree(req, res) {
+async function listTree(req, res) {
   const { id } = req.params;
-  const nodes = treeService.listTree(id, req.user.id);
+  const nodes = await treeService.listTree(id, req.user);
   return sendSuccess(res, nodes, 200, { count: nodes.length });
 }
 
-function createNode(req, res) {
+async function createNode(req, res) {
   const { id } = req.params;
   const { parentId, name, completion } = req.body;
-  const node = treeService.createNode(id, { parentId, name, completion }, req.user.id);
+  const node = await treeService.createNode(id, { parentId, name, completion }, req.user);
   return sendSuccess(res, node, 201);
 }
 
-function getNode(req, res) {
+async function getNode(req, res) {
   const { nodeId } = req.params;
-  const node = treeService.getNode(nodeId, req.user.id);
+  const node = await treeService.getNode(nodeId, req.user);
   return sendSuccess(res, node, 200);
 }
 
-function patchNode(req, res) {
+async function patchNode(req, res) {
   const { nodeId } = req.params;
-  const node = treeService.updateNode(nodeId, req.body, req.user.id);
+  const node = await treeService.updateNode(nodeId, req.body, req.user);
   return sendSuccess(res, node, 200);
 }
 
-function deleteNode(req, res) {
+async function deleteNode(req, res) {
   const { nodeId } = req.params;
-  const deleted = treeService.deleteNode(nodeId, req.user.id);
+  const deleted = await treeService.deleteNode(nodeId, req.user);
   return sendSuccess(res, { id: deleted.id, deleted: true }, 200);
 }
 

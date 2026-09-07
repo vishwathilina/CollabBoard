@@ -102,12 +102,16 @@ function groupByTreeNode(items, treeNodes) {
   return groups;
 }
 
-function getGantt(workspaceId, requesterId) {
-  const workspace = workspaceRepo.findById(workspaceId);
+async function getGantt(workspaceId, requesterId) {
+  const workspace = await workspaceRepo.findById(workspaceId);
   if (!workspace) {
     throw new AppError(404, "NOT_FOUND", `Workspace '${workspaceId}' was not found.`);
   }
-  if (!workspace.memberIds.includes(requesterId)) {
+  const uid = typeof requesterId === "object" ? (requesterId.id || requesterId._id) : requesterId;
+  const isSeniorPM = typeof requesterId === "object" && (requesterId.orgRole === "senior_project_manager" || requesterId.orgRole === "admin");
+  const wsMemberIds = workspace.memberIds || (workspace.members || []).map((m) => m.userId);
+
+  if (!isSeniorPM && !wsMemberIds.includes(uid) && workspace.ownerId !== uid) {
     throw new AppError(403, "FORBIDDEN", "You are not a member of this workspace.");
   }
 
@@ -124,7 +128,7 @@ function getGantt(workspaceId, requesterId) {
   const axisEndMs = addUtcDays(utcDay(maxDue), 1);
   const spanMs = Math.max(axisEndMs - axisStartMs, DAY_MS);
   const tickMs = axisTicks(axisStartMs, axisEndMs);
-  const treeNodes = treeNodeRepo.findByWorkspace(workspaceId);
+  const treeNodes = await treeNodeRepo.findByWorkspace(workspaceId);
   const rawGroups = groupByTreeNode(ranges, treeNodes);
 
   const groups = rawGroups.map((group) => ({
@@ -138,6 +142,8 @@ function getGantt(workspaceId, requesterId) {
       );
       return {
         task: { ...item.task },
+        start: new Date(item.start).toISOString(),
+        due: new Date(item.due).toISOString(),
         leftPercent,
         widthPercent,
       };
@@ -152,4 +158,13 @@ function getGantt(workspaceId, requesterId) {
   };
 }
 
-module.exports = { getGantt };
+module.exports = {
+  getGantt,
+  parseTime,
+  utcDay,
+  addUtcDays,
+  taskRange,
+  barPercents,
+  axisTicks,
+  groupByTreeNode,
+};
