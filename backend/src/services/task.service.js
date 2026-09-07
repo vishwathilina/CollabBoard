@@ -2,20 +2,47 @@ const { AppError } = require("../utils/AppError");
 const taskRepo = require("../repos/task.repo");
 const treeNodeRepo = require("../repos/treeNode.repo");
 const workspaceRepo = require("../repos/workspace.repo");
+const userRepo = require("../repos/user.repo");
+const rbacService = require("./rbac.service");
 
-function assertWorkspaceAndMembership(workspaceId, requesterId) {
-  const workspace = workspaceRepo.findById(workspaceId);
+/**
+ * Resolves a user object ensuring id and orgRole are present.
+ */
+async function resolveUser(userOrId) {
+  if (!userOrId) return null;
+  if (typeof userOrId === "object" && (userOrId.id || userOrId._id || userOrId.userId)) {
+    const id = userOrId.id || userOrId._id || userOrId.userId;
+    const user = {
+      id,
+      email: userOrId.email,
+      name: userOrId.name,
+      orgRole: userOrId.orgRole,
+    };
+    if (!user.orgRole) {
+      const dbUser = await userRepo.findById(id);
+      if (dbUser) user.orgRole = dbUser.orgRole;
+    }
+    return user;
+  }
+  const dbUser = await userRepo.findById(userOrId);
+  return dbUser || { id: userOrId, orgRole: "developer" };
+}
+
+async function assertWorkspaceAndMembership(workspaceId, userOrId, action = "workspace:read") {
+  const user = await resolveUser(userOrId);
+  if (!user) {
+    throw new AppError(401, "UNAUTHORIZED", "Authentication required.");
+  }
+  const workspace = await workspaceRepo.findById(workspaceId);
   if (!workspace) {
     throw new AppError(404, "NOT_FOUND", `Workspace '${workspaceId}' was not found.`);
   }
-  if (!workspace.memberIds.includes(requesterId)) {
-    throw new AppError(403, "FORBIDDEN", "You are not a member of this workspace.");
-  }
-  return workspace;
+  rbacService.assertCan(user, workspace, action);
+  return { workspace, user };
 }
 
-function assertTreeNodeInWorkspace(treeNodeId, workspaceId) {
-  const node = treeNodeRepo.findById(treeNodeId);
+async function assertTreeNodeInWorkspace(treeNodeId, workspaceId) {
+  const node = await treeNodeRepo.findById(treeNodeId);
   if (!node) {
     throw new AppError(404, "NOT_FOUND", `Tree node '${treeNodeId}' was not found.`);
   }
@@ -28,7 +55,8 @@ function assertTreeNodeInWorkspace(treeNodeId, workspaceId) {
 }
 
 function assertMemberIdsSubset(memberIds, workspace) {
-  const invalid = memberIds.filter((id) => !workspace.memberIds.includes(id));
+  const wsMemberIds = workspace.memberIds || (workspace.members || []).map((m) => m.userId);
+  const invalid = memberIds.filter((id) => !wsMemberIds.includes(id));
   if (invalid.length > 0) {
     throw new AppError(422, "VALIDATION_ERROR", "memberIds must be a subset of workspace members.", [
       { path: "body.memberIds", message: `Unknown or non-member ids: ${invalid.join(", ")}` },
@@ -52,17 +80,26 @@ function getTaskOrThrow(taskId) {
   return task;
 }
 
-function listTasks(workspaceId, query, requesterId) {
-  assertWorkspaceAndMembership(workspaceId, requesterId);
+async function listTasks(workspaceId, query, userOrId) {
+  const { workspace, user } = await assertWorkspaceAndMembership(workspaceId, userOrId, "workspace:read");
+
+  if (query.treeNode) {
+    const allNodes = await treeNodeRepo.findByWorkspace(workspaceId);
+    const visibleIds = new Set(rbacService.filterTreeNodeIds(workspace, user, allNodes));
+    if (!visibleIds.has(query.treeNode)) {
+      throw new AppError(403, "FORBIDDEN", "You do not have access to this tree node.");
+    }
+  }
+
   return taskRepo.findByWorkspace(workspaceId, {
     treeNode: query.treeNode,
     column: query.column,
   });
 }
 
-function createTask(workspaceId, body, requesterId) {
-  const workspace = assertWorkspaceAndMembership(workspaceId, requesterId);
-  assertTreeNodeInWorkspace(body.treeNodeId, workspaceId);
+async function createTask(workspaceId, body, requesterId) {
+  const { workspace } = await assertWorkspaceAndMembership(workspaceId, requesterId, "task:create");
+  await assertTreeNodeInWorkspace(body.treeNodeId, workspaceId);
   const memberIds = body.memberIds ?? [];
   assertMemberIdsSubset(memberIds, workspace);
   assertDateOrder(body.startDate, body.dueDate);
@@ -81,15 +118,15 @@ function createTask(workspaceId, body, requesterId) {
   });
 }
 
-function getTask(taskId, requesterId) {
+async function getTask(taskId, requesterId) {
   const task = getTaskOrThrow(taskId);
-  assertWorkspaceAndMembership(task.workspaceId, requesterId);
+  await assertWorkspaceAndMembership(task.workspaceId, requesterId, "workspace:read");
   return task;
 }
 
-function updateTask(taskId, body, requesterId) {
+async function updateTask(taskId, body, requesterId) {
   const task = getTaskOrThrow(taskId);
-  const workspace = assertWorkspaceAndMembership(task.workspaceId, requesterId);
+  const { workspace } = await assertWorkspaceAndMembership(task.workspaceId, requesterId, "task:edit");
 
   if (body.version !== undefined && body.version !== task.version) {
     throw new AppError(409, "CONFLICT", "Task version conflict.", [
@@ -98,7 +135,7 @@ function updateTask(taskId, body, requesterId) {
   }
 
   if (body.treeNodeId !== undefined) {
-    assertTreeNodeInWorkspace(body.treeNodeId, task.workspaceId);
+    await assertTreeNodeInWorkspace(body.treeNodeId, task.workspaceId);
   }
   if (body.memberIds !== undefined) {
     assertMemberIdsSubset(body.memberIds, workspace);
@@ -113,9 +150,11 @@ function updateTask(taskId, body, requesterId) {
   return updated;
 }
 
-function moveTask(taskId, { column }, requesterId) {
+async function moveTask(taskId, { column }, requesterId) {
   const task = getTaskOrThrow(taskId);
-  assertWorkspaceAndMembership(task.workspaceId, requesterId);
+  const { workspace, user } = await assertWorkspaceAndMembership(task.workspaceId, requesterId, "workspace:read");
+
+  rbacService.assertCanMoveTask(user, workspace, task, column);
 
   const updated = taskRepo.update(taskId, {
     column,
@@ -124,9 +163,9 @@ function moveTask(taskId, { column }, requesterId) {
   return updated;
 }
 
-function deleteTask(taskId, requesterId) {
+async function deleteTask(taskId, requesterId) {
   const task = getTaskOrThrow(taskId);
-  assertWorkspaceAndMembership(task.workspaceId, requesterId);
+  await assertWorkspaceAndMembership(task.workspaceId, requesterId, "task:edit");
   taskRepo.remove(taskId);
   return { id: taskId, deleted: true };
 }

@@ -1,7 +1,33 @@
 const { AppError } = require("../utils/AppError");
 const treeNodeRepo = require("../repos/treeNode.repo");
 const workspaceRepo = require("../repos/workspace.repo");
+const userRepo = require("../repos/user.repo");
+const taskRepo = require("../repos/task.repo");
+const rbacService = require("./rbac.service");
 const { getStore } = require("../store/memory.store");
+
+/**
+ * Resolves a user object ensuring id and orgRole are present.
+ */
+async function resolveUser(userOrId) {
+  if (!userOrId) return null;
+  if (typeof userOrId === "object" && (userOrId.id || userOrId._id || userOrId.userId)) {
+    const id = userOrId.id || userOrId._id || userOrId.userId;
+    const user = {
+      id,
+      email: userOrId.email,
+      name: userOrId.name,
+      orgRole: userOrId.orgRole,
+    };
+    if (!user.orgRole) {
+      const dbUser = await userRepo.findById(id);
+      if (dbUser) user.orgRole = dbUser.orgRole;
+    }
+    return user;
+  }
+  const dbUser = await userRepo.findById(userOrId);
+  return dbUser || { id: userOrId, orgRole: "developer" };
+}
 
 /**
  * Ensure parent appears before child.
@@ -14,8 +40,6 @@ function sortParentBeforeChild(nodes) {
   const placed = new Set();
 
   // Roots first
-  const roots = nodes.filter((n) => n.parentId === null || !idSet.has(n.parentId));
-  // To keep deterministic order, sort roots by original order? Keep insertion order.
   for (const r of nodes) {
     if (r.parentId === null || !idSet.has(r.parentId)) {
       sorted.push(r);
@@ -55,9 +79,16 @@ function sortParentBeforeChild(nodes) {
  * If no tasks for a node/subtree, keep stored completion.
  * This keeps UI progress consistent with actual task progress.
  */
-function withRecomputedCompletion(nodes) {
-  const store = getStore();
-  const tasks = store.tasks;
+function withRecomputedCompletion(nodes, workspaceTasks) {
+  let tasks = workspaceTasks;
+  if (!tasks) {
+    try {
+      const store = getStore();
+      tasks = store.tasks || [];
+    } catch {
+      tasks = [];
+    }
+  }
 
   // Build parent -> children map for descendant traversal
   const childrenMap = new Map(); // parentId -> [childId]
@@ -96,43 +127,56 @@ function withRecomputedCompletion(nodes) {
   });
 }
 
-function assertWorkspaceAndMembership(workspaceId, requesterId) {
-  const workspace = workspaceRepo.findById(workspaceId);
+async function assertWorkspaceAndMembership(workspaceId, userOrId, action = "workspace:read") {
+  const user = await resolveUser(userOrId);
+  if (!user) {
+    throw new AppError(401, "UNAUTHORIZED", "Authentication required.");
+  }
+
+  const workspace = await workspaceRepo.findById(workspaceId);
   if (!workspace) {
     throw new AppError(404, "NOT_FOUND", `Workspace '${workspaceId}' was not found.`);
   }
-  if (!workspace.memberIds.includes(requesterId)) {
-    throw new AppError(403, "FORBIDDEN", "You are not a member of this workspace.");
-  }
-  return workspace;
+
+  rbacService.assertCan(user, workspace, action);
+  return { workspace, user };
 }
 
-function assertParentValid(parentId, workspaceId) {
-  if (parentId === null || parentId === undefined) return;
-  const parent = treeNodeRepo.findById(parentId);
-  if (!parent) {
-    throw new AppError(404, "NOT_FOUND", `Parent node '${parentId}' was not found.`);
+async function listTree(workspaceId, userOrId) {
+  const { workspace, user } = await assertWorkspaceAndMembership(workspaceId, userOrId, "workspace:read");
+  const allNodes = await treeNodeRepo.findByWorkspace(workspaceId);
+
+  // RBAC filter: developer & designer see visibleTreeNodeIds + ancestors + descendants;
+  // owner, PM, QA, viewer, SPM see full tree
+  const visibleNodes = rbacService.filterTreeNodes(workspace, user, allNodes);
+
+  // Get tasks to recompute completion
+  let tasks = [];
+  try {
+    tasks = taskRepo.findByWorkspace(workspaceId) || [];
+  } catch {
+    tasks = [];
   }
-  if (parent.workspaceId !== workspaceId) {
-    throw new AppError(400, "BAD_REQUEST", "Parent node belongs to a different workspace.");
-  }
+
+  const nodesWithCompletion = withRecomputedCompletion(visibleNodes, tasks);
+  return sortParentBeforeChild(nodesWithCompletion);
 }
 
-function listTree(workspaceId, requesterId) {
-  assertWorkspaceAndMembership(workspaceId, requesterId);
-  let nodes = treeNodeRepo.findByWorkspace(workspaceId);
-  // Recompute completion from descendant tasks (if any tasks exist)
-  nodes = withRecomputedCompletion(nodes);
-  nodes = sortParentBeforeChild(nodes);
-  return nodes;
-}
+async function createNode(workspaceId, { parentId, name, completion }, userOrId) {
+  const { workspace } = await assertWorkspaceAndMembership(workspaceId, userOrId, "tree:edit");
 
-function createNode(workspaceId, { parentId, name, completion }, requesterId) {
-  assertWorkspaceAndMembership(workspaceId, requesterId);
-  // Normalize parentId: undefined -> null
   const normalizedParentId = parentId === undefined ? null : parentId;
-  assertParentValid(normalizedParentId, workspaceId);
-  const node = treeNodeRepo.create({
+  if (normalizedParentId !== null) {
+    const parent = await treeNodeRepo.findById(normalizedParentId);
+    if (!parent) {
+      throw new AppError(404, "NOT_FOUND", `Parent node '${normalizedParentId}' was not found.`);
+    }
+    if (parent.workspaceId !== workspaceId) {
+      throw new AppError(400, "BAD_REQUEST", "Parent node belongs to a different workspace.");
+    }
+  }
+
+  const node = await treeNodeRepo.create({
     workspaceId,
     parentId: normalizedParentId,
     name,
@@ -141,23 +185,51 @@ function createNode(workspaceId, { parentId, name, completion }, requesterId) {
   return node;
 }
 
-function getNode(nodeId, requesterId) {
-  const node = treeNodeRepo.findById(nodeId);
+async function getNode(nodeId, userOrId) {
+  const user = await resolveUser(userOrId);
+  if (!user) {
+    throw new AppError(401, "UNAUTHORIZED", "Authentication required.");
+  }
+
+  const node = await treeNodeRepo.findById(nodeId);
   if (!node) {
     throw new AppError(404, "NOT_FOUND", `Tree node '${nodeId}' was not found.`);
   }
-  assertWorkspaceAndMembership(node.workspaceId, requesterId);
-  // Single-node GET returns stored completion (not recomputed).
-  // List GET (listTree) optionally recomputes completion from descendant tasks.
+
+  const workspace = await workspaceRepo.findById(node.workspaceId);
+  if (!workspace) {
+    throw new AppError(404, "NOT_FOUND", `Workspace '${node.workspaceId}' was not found.`);
+  }
+
+  rbacService.assertCan(user, workspace, "workspace:read");
+
+  // Check if developer/designer has visibility of this node
+  const allNodes = await treeNodeRepo.findByWorkspace(node.workspaceId);
+  const visibleIds = new Set(rbacService.filterTreeNodeIds(workspace, user, allNodes));
+  if (!visibleIds.has(nodeId)) {
+    throw new AppError(403, "FORBIDDEN", "You do not have access to this tree node.");
+  }
+
   return node;
 }
 
-function updateNode(nodeId, patch, requesterId) {
-  const node = treeNodeRepo.findById(nodeId);
+async function updateNode(nodeId, patch, userOrId) {
+  const user = await resolveUser(userOrId);
+  if (!user) {
+    throw new AppError(401, "UNAUTHORIZED", "Authentication required.");
+  }
+
+  const node = await treeNodeRepo.findById(nodeId);
   if (!node) {
     throw new AppError(404, "NOT_FOUND", `Tree node '${nodeId}' was not found.`);
   }
-  assertWorkspaceAndMembership(node.workspaceId, requesterId);
+
+  const workspace = await workspaceRepo.findById(node.workspaceId);
+  if (!workspace) {
+    throw new AppError(404, "NOT_FOUND", `Workspace '${node.workspaceId}' was not found.`);
+  }
+
+  rbacService.assertCan(user, workspace, "tree:edit");
 
   if (patch.parentId !== undefined) {
     const newParentId = patch.parentId;
@@ -165,7 +237,7 @@ function updateNode(nodeId, patch, requesterId) {
       throw new AppError(409, "CONFLICT", "Cannot set parentId to self.");
     }
     if (newParentId !== null) {
-      const parent = treeNodeRepo.findById(newParentId);
+      const parent = await treeNodeRepo.findById(newParentId);
       if (!parent) {
         throw new AppError(404, "NOT_FOUND", `Parent node '${newParentId}' was not found.`);
       }
@@ -173,41 +245,54 @@ function updateNode(nodeId, patch, requesterId) {
         throw new AppError(400, "BAD_REQUEST", "Parent node belongs to a different workspace.");
       }
       // Cycle detection: cannot set parentId to descendant
-      const descendants = treeNodeRepo.getDescendantIds(nodeId);
+      const descendants = await treeNodeRepo.getDescendantIds(nodeId);
       if (descendants.has(newParentId)) {
         throw new AppError(409, "CONFLICT", "Cannot set parentId to a descendant (cycle detected).");
       }
     }
   }
 
-  const updated = treeNodeRepo.update(nodeId, patch);
+  const updated = await treeNodeRepo.update(nodeId, patch);
   return updated;
 }
 
-function deleteNode(nodeId, requesterId) {
-  const node = treeNodeRepo.findById(nodeId);
+async function deleteNode(nodeId, userOrId) {
+  const user = await resolveUser(userOrId);
+  if (!user) {
+    throw new AppError(401, "UNAUTHORIZED", "Authentication required.");
+  }
+
+  const node = await treeNodeRepo.findById(nodeId);
   if (!node) {
     throw new AppError(404, "NOT_FOUND", `Tree node '${nodeId}' was not found.`);
   }
-  assertWorkspaceAndMembership(node.workspaceId, requesterId);
 
-  if (treeNodeRepo.hasChildren(nodeId)) {
+  const workspace = await workspaceRepo.findById(node.workspaceId);
+  if (!workspace) {
+    throw new AppError(404, "NOT_FOUND", `Workspace '${node.workspaceId}' was not found.`);
+  }
+
+  rbacService.assertCan(user, workspace, "tree:edit");
+
+  if (await treeNodeRepo.hasChildren(nodeId)) {
     throw new AppError(409, "NODE_HAS_CHILDREN", `Node '${nodeId}' has children. Delete leaves first.`);
   }
-  if (treeNodeRepo.hasTasks(nodeId)) {
+  if (await treeNodeRepo.hasTasks(nodeId)) {
     throw new AppError(409, "NODE_HAS_TASKS", `Node '${nodeId}' still has tasks. Move or delete tasks first.`);
   }
 
-  const deleted = treeNodeRepo.remove(nodeId);
+  const deleted = await treeNodeRepo.remove(nodeId);
   return deleted;
 }
 
 module.exports = {
+  resolveUser,
+  assertWorkspaceAndMembership,
   listTree,
   createNode,
   getNode,
   updateNode,
   deleteNode,
-  sortParentBeforeChild, // exported for testing
+  sortParentBeforeChild,
   withRecomputedCompletion,
 };
