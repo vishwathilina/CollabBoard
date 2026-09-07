@@ -72,8 +72,8 @@ function assertDateOrder(startDate, dueDate) {
   }
 }
 
-function getTaskOrThrow(taskId) {
-  const task = taskRepo.findById(taskId);
+async function getTaskOrThrow(taskId) {
+  const task = await taskRepo.findById(taskId);
   if (!task) {
     throw new AppError(404, "NOT_FOUND", `Task '${taskId}' was not found.`);
   }
@@ -83,28 +83,37 @@ function getTaskOrThrow(taskId) {
 async function listTasks(workspaceId, query, userOrId) {
   const { workspace, user } = await assertWorkspaceAndMembership(workspaceId, userOrId, "workspace:read");
 
+  const allNodes = await treeNodeRepo.findByWorkspace(workspaceId);
+  const visibleIds = rbacService.filterTreeNodeIds(workspace, user, allNodes);
+
   if (query.treeNode) {
-    const allNodes = await treeNodeRepo.findByWorkspace(workspaceId);
-    const visibleIds = new Set(rbacService.filterTreeNodeIds(workspace, user, allNodes));
-    if (!visibleIds.has(query.treeNode)) {
+    const visibleSet = new Set(visibleIds);
+    if (!visibleSet.has(query.treeNode)) {
       throw new AppError(403, "FORBIDDEN", "You do not have access to this tree node.");
     }
+    return await taskRepo.findByWorkspace(workspaceId, {
+      treeNode: query.treeNode,
+      column: query.column,
+    });
   }
 
-  return taskRepo.findByWorkspace(workspaceId, {
-    treeNode: query.treeNode,
+  const membership = rbacService.getMembership(workspace, user);
+  const isScoped = membership && ["developer", "designer"].includes(membership.role);
+
+  return await taskRepo.findByWorkspace(workspaceId, {
+    treeNodeIds: isScoped ? visibleIds : undefined,
     column: query.column,
   });
 }
 
 async function createTask(workspaceId, body, requesterId) {
-  const { workspace } = await assertWorkspaceAndMembership(workspaceId, requesterId, "task:create");
+  const { workspace, user } = await assertWorkspaceAndMembership(workspaceId, requesterId, "task:create");
   await assertTreeNodeInWorkspace(body.treeNodeId, workspaceId);
   const memberIds = body.memberIds ?? [];
   assertMemberIdsSubset(memberIds, workspace);
   assertDateOrder(body.startDate, body.dueDate);
 
-  return taskRepo.create({
+  return await taskRepo.create({
     workspaceId,
     treeNodeId: body.treeNodeId,
     column: body.column,
@@ -115,24 +124,20 @@ async function createTask(workspaceId, body, requesterId) {
     startDate: body.startDate,
     dueDate: body.dueDate,
     completion: body.completion,
+    order: body.order,
+    updatedBy: user.id,
   });
 }
 
 async function getTask(taskId, requesterId) {
-  const task = getTaskOrThrow(taskId);
+  const task = await getTaskOrThrow(taskId);
   await assertWorkspaceAndMembership(task.workspaceId, requesterId, "workspace:read");
   return task;
 }
 
 async function updateTask(taskId, body, requesterId) {
-  const task = getTaskOrThrow(taskId);
-  const { workspace } = await assertWorkspaceAndMembership(task.workspaceId, requesterId, "task:edit");
-
-  if (body.version !== undefined && body.version !== task.version) {
-    throw new AppError(409, "CONFLICT", "Task version conflict.", [
-      { currentVersion: task.version, task: { ...task } },
-    ]);
-  }
+  const task = await getTaskOrThrow(taskId);
+  const { workspace, user } = await assertWorkspaceAndMembership(task.workspaceId, requesterId, "task:edit");
 
   if (body.treeNodeId !== undefined) {
     await assertTreeNodeInWorkspace(body.treeNodeId, task.workspaceId);
@@ -145,28 +150,83 @@ async function updateTask(taskId, body, requesterId) {
   const dueDate = body.dueDate !== undefined ? body.dueDate : task.dueDate;
   assertDateOrder(startDate, dueDate);
 
-  const { version: _version, ...patch } = body;
-  const updated = taskRepo.update(taskId, { ...patch, version: task.version + 1 });
+  const { version: clientVersion, ...patch } = body;
+
+  if (clientVersion !== undefined) {
+    if (clientVersion !== task.version) {
+      throw new AppError(409, "CONFLICT", "Task version conflict.", [
+        { currentVersion: task.version, task: { ...task } },
+      ]);
+    }
+
+    const updated = await taskRepo.updateWithVersion(taskId, clientVersion, patch, user.id);
+    if (!updated) {
+      const current = await taskRepo.findById(taskId);
+      if (!current) {
+        throw new AppError(404, "NOT_FOUND", `Task '${taskId}' was not found.`);
+      }
+      throw new AppError(409, "CONFLICT", "Task version conflict.", [
+        { currentVersion: current.version, task: current },
+      ]);
+    }
+    return updated;
+  }
+
+  const updated = await taskRepo.update(taskId, {
+    ...patch,
+    updatedBy: user.id,
+    version: task.version + 1,
+  });
   return updated;
 }
 
-async function moveTask(taskId, { column }, requesterId) {
-  const task = getTaskOrThrow(taskId);
+async function moveTask(taskId, body, requesterId) {
+  const task = await getTaskOrThrow(taskId);
   const { workspace, user } = await assertWorkspaceAndMembership(task.workspaceId, requesterId, "workspace:read");
 
-  rbacService.assertCanMoveTask(user, workspace, task, column);
+  rbacService.assertCanMoveTask(user, workspace, task, body.column);
 
-  const updated = taskRepo.update(taskId, {
+  const { column, order, version: clientVersion } = body;
+  const targetOrder = order !== undefined ? order : task.order;
+
+  if (clientVersion !== undefined) {
+    if (clientVersion !== task.version) {
+      throw new AppError(409, "CONFLICT", "Task version conflict.", [
+        { currentVersion: task.version, task: { ...task } },
+      ]);
+    }
+
+    const updated = await taskRepo.updateWithVersion(
+      taskId,
+      clientVersion,
+      { column, order: targetOrder },
+      user.id
+    );
+    if (!updated) {
+      const current = await taskRepo.findById(taskId);
+      if (!current) {
+        throw new AppError(404, "NOT_FOUND", `Task '${taskId}' was not found.`);
+      }
+      throw new AppError(409, "CONFLICT", "Task version conflict.", [
+        { currentVersion: current.version, task: current },
+      ]);
+    }
+    return updated;
+  }
+
+  const updated = await taskRepo.update(taskId, {
     column,
+    order: targetOrder,
+    updatedBy: user.id,
     version: task.version + 1,
   });
   return updated;
 }
 
 async function deleteTask(taskId, requesterId) {
-  const task = getTaskOrThrow(taskId);
+  const task = await getTaskOrThrow(taskId);
   await assertWorkspaceAndMembership(task.workspaceId, requesterId, "task:edit");
-  taskRepo.remove(taskId);
+  await taskRepo.remove(taskId);
   return { id: taskId, deleted: true };
 }
 

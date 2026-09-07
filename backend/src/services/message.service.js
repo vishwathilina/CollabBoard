@@ -4,7 +4,7 @@ const workspaceRepo = require("../repos/workspace.repo");
 const messageRepo = require("../repos/message.repo");
 
 async function assertTaskAndMembership(taskId, requesterId) {
-  const task = taskRepo.findById(taskId);
+  const task = await taskRepo.findById(taskId);
   if (!task) {
     throw new AppError(404, "NOT_FOUND", `Task '${taskId}' was not found.`);
   }
@@ -41,7 +41,7 @@ async function deleteMessage(messageId, requesterId) {
   const uid = typeof requesterId === "object" ? (requesterId.id || requesterId._id) : requesterId;
 
   // Need to verify membership of underlying task workspace as well
-  const task = taskRepo.findById(message.taskId);
+  const task = await taskRepo.findById(message.taskId);
   if (!task) {
     if (message.authorId !== uid) {
       throw new AppError(403, "FORBIDDEN", "Only the author can delete this message.");

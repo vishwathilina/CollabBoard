@@ -52,6 +52,7 @@ const taskPatchSchema = z
     dueDate: isoDateString.optional(),
     completion: z.number().min(0).max(100).optional(),
     version: z.number().int().positive().optional(),
+    order: z.number().min(0).optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: "At least one field must be provided",
@@ -66,6 +67,8 @@ const taskPatchSchema = z
 
 const taskMoveSchema = z.object({
   column: columnEnum,
+  order: z.number().min(0).optional(),
+  version: z.number().int().positive().optional(),
 });
 
 module.exports = {

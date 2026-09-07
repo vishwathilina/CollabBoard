@@ -513,6 +513,99 @@
               ]
             }
           }
+        },
+        {
+          "name": "Move Task",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "var json = pm.response.json();",
+                  "pm.test('Task column and version updated', function () {",
+                  "    pm.expect(json.data.column).to.eql('in_progress');",
+                  "    pm.expect(json.data.order).to.eql(1);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"column\":\"in_progress\",\"order\":1,\"version\":1}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tasks/{{taskId}}/move",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tasks",
+                "{{taskId}}",
+                "move"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Move Task Stale Version (409 Conflict)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 409', function () { pm.response.to.have.status(409); });",
+                  "var json = pm.response.json();",
+                  "pm.test('Error code is CONFLICT', function () {",
+                  "    pm.expect(json.error.code).to.eql('CONFLICT');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"column\":\"done\",\"order\":0,\"version\":9999}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tasks/{{taskId}}/move",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tasks",
+                "{{taskId}}",
+                "move"
+              ]
+            }
+          }
         }
       ]
     }
