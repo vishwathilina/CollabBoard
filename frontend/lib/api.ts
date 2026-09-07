@@ -4,6 +4,20 @@ interface FetchOptions extends RequestInit {
   token?: string | null;
 }
 
+export class ApiError extends Error {
+  status: number;
+  code?: string;
+  details?: unknown;
+
+  constructor(status: number, message: string, code?: string, details?: unknown) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.code = code;
+    this.details = details;
+  }
+}
+
 export async function apiFetch<T>(path: string, options: FetchOptions = {}): Promise<T> {
   const { token, headers, ...rest } = options;
 
@@ -23,7 +37,8 @@ export async function apiFetch<T>(path: string, options: FetchOptions = {}): Pro
   const body = await response.json().catch(() => null);
 
   if (!response.ok || (body && body.success === false)) {
-    throw new Error(body?.error?.message || `API request failed with status ${response.status}`);
+    const message = body?.error?.message || `API request failed with status ${response.status}`;
+    throw new ApiError(response.status, message, body?.error?.code, body?.error?.details);
   }
 
   return body?.data as T;

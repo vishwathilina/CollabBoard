@@ -71,6 +71,7 @@ export type TaskCardProps = {
   members: User[];
   highlighted?: boolean;
   onClick: () => void;
+  isDragging?: boolean;
 };
 
 export type KanbanColumnProps = {
@@ -78,12 +79,15 @@ export type KanbanColumnProps = {
   column: TaskColumn;
   count: number;
   children: ReactNode;
+  onAddTask?: (column: TaskColumn) => void;
+  canCreateTask?: boolean;
 };
 
 export type TaskDetailDrawerProps = {
   task: Task | null;
   open: boolean;
   onClose: () => void;
+  onTaskUpdated?: (updatedTask: Task) => void;
 };
 
 export type MessageChannelProps = {
