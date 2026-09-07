@@ -51,12 +51,37 @@ export interface TreeNode {
   completion: number; // 0-100
 }
 
+export type WorkspaceRole =
+  | "owner"
+  | "project_manager"
+  | "developer"
+  | "designer"
+  | "qa"
+  | "viewer";
+
+export type OrgRole =
+  | "senior_project_manager"
+  | "project_manager"
+  | "developer"
+  | "designer"
+  | "qa"
+  | "stakeholder"
+  | "admin";
+
+export interface WorkspaceMember {
+  userId: string;
+  role: WorkspaceRole;
+  visibleTreeNodeIds?: string[];
+}
+
 export interface Workspace {
   id: string;
   name: string;
   description: string;
-  memberIds: string[];
   color: string; // hex accent on dashboard cards
+  ownerId?: string;
+  members?: WorkspaceMember[];
+  memberIds: string[];
 }
 
-export type WorkspaceView = "tree" | "board" | "gantt";
+export type WorkspaceView = "tree" | "board" | "gantt" | "settings";

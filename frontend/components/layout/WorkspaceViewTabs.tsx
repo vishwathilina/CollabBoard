@@ -3,16 +3,24 @@
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
 
-const tabs = [
-  { view: "tree", label: "Tree" },
-  { view: "board", label: "Board" },
-  { view: "gantt", label: "Gantt" },
-] as const;
+interface WorkspaceViewTabsProps {
+  canManageSettings?: boolean;
+}
 
-export function WorkspaceViewTabs() {
+export function WorkspaceViewTabs({ canManageSettings = false }: WorkspaceViewTabsProps) {
   const params = useParams<{ id: string }>();
   const pathname = usePathname();
   const workspaceId = params.id;
+
+  const tabs: { view: string; label: string }[] = [
+    { view: "tree", label: "Tree" },
+    { view: "board", label: "Board" },
+    { view: "gantt", label: "Gantt" },
+  ];
+
+  if (canManageSettings) {
+    tabs.push({ view: "settings", label: "Settings" });
+  }
 
   return (
     <div className="flex gap-4 border-b border-border px-6">
@@ -23,7 +31,7 @@ export function WorkspaceViewTabs() {
           <Link
             key={tab.view}
             href={href}
-            className={`-mb-px border-b-2 py-2.5 text-sm ${
+            className={`-mb-px border-b-2 py-2.5 text-sm transition-colors ${
               active
                 ? "border-accent font-medium text-accent"
                 : "border-transparent text-muted hover:text-fg"
