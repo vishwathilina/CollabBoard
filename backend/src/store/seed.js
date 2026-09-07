@@ -3,14 +3,14 @@
 // passwordPlain is kept only to allow Member 2 to hash at boot then it is deleted from memory.
 
 const users = [
-  { id: "u-ada", name: "Ada Lovelace", avatarColor: "#C6F135", email: "ada@collabboard.local", passwordPlain: "CollabBoard!1" },
-  { id: "u-linus", name: "Linus Torvalds", avatarColor: "#5B8DEF", email: "linus@collabboard.local", passwordPlain: "CollabBoard!1" },
-  { id: "u-grace", name: "Grace Hopper", avatarColor: "#E879F9", email: "grace@collabboard.local", passwordPlain: "CollabBoard!1" },
-  { id: "u-alan", name: "Alan Turing", avatarColor: "#F59E0B", email: "alan@collabboard.local", passwordPlain: "CollabBoard!1" },
-  { id: "u-margaret", name: "Margaret Hamilton", avatarColor: "#34D399", email: "margaret@collabboard.local", passwordPlain: "CollabBoard!1" },
-  { id: "u-dennis", name: "Dennis Ritchie", avatarColor: "#FB7185", email: "dennis@collabboard.local", passwordPlain: "CollabBoard!1" },
-  { id: "u-barbara", name: "Barbara Liskov", avatarColor: "#818CF8", email: "barbara@collabboard.local", passwordPlain: "CollabBoard!1" },
-  { id: "u-tim", name: "Tim Berners-Lee", avatarColor: "#22D3EE", email: "tim@collabboard.local", passwordPlain: "CollabBoard!1" },
+  { id: "u-ada", name: "Ada Lovelace", avatarColor: "#C6F135", email: "ada@collabboard.local", passwordPlain: "CollabBoard!1", orgRole: "senior_project_manager" },
+  { id: "u-linus", name: "Linus Torvalds", avatarColor: "#5B8DEF", email: "linus@collabboard.local", passwordPlain: "CollabBoard!1", orgRole: "developer" },
+  { id: "u-grace", name: "Grace Hopper", avatarColor: "#E879F9", email: "grace@collabboard.local", passwordPlain: "CollabBoard!1", orgRole: "project_manager" },
+  { id: "u-alan", name: "Alan Turing", avatarColor: "#F59E0B", email: "alan@collabboard.local", passwordPlain: "CollabBoard!1", orgRole: "developer" },
+  { id: "u-margaret", name: "Margaret Hamilton", avatarColor: "#34D399", email: "margaret@collabboard.local", passwordPlain: "CollabBoard!1", orgRole: "developer" },
+  { id: "u-dennis", name: "Dennis Ritchie", avatarColor: "#FB7185", email: "dennis@collabboard.local", passwordPlain: "CollabBoard!1", orgRole: "qa" },
+  { id: "u-barbara", name: "Barbara Liskov", avatarColor: "#818CF8", email: "barbara@collabboard.local", passwordPlain: "CollabBoard!1", orgRole: "designer" },
+  { id: "u-tim", name: "Tim Berners-Lee", avatarColor: "#22D3EE", email: "tim@collabboard.local", passwordPlain: "CollabBoard!1", orgRole: "viewer" },
 ];
 
 const workspaces = [
@@ -18,15 +18,32 @@ const workspaces = [
     id: "ws-website",
     name: "Website Overhaul",
     description: "Rebuild the marketing site and customer portal.",
-    memberIds: ["u-ada", "u-linus", "u-grace", "u-alan", "u-margaret", "u-dennis", "u-barbara", "u-tim"],
     color: "#C6F135",
+    ownerId: "u-ada",
+    members: [
+      { userId: "u-ada", role: "owner" },
+      { userId: "u-linus", role: "developer", visibleTreeNodeIds: ["tn-engineering", "tn-api", "tn-frontend"] },
+      { userId: "u-grace", role: "project_manager" },
+      { userId: "u-alan", role: "developer" },
+      { userId: "u-margaret", role: "developer" },
+      { userId: "u-dennis", role: "qa" },
+      { userId: "u-barbara", role: "designer" },
+      { userId: "u-tim", role: "viewer" },
+    ],
+    memberIds: ["u-ada", "u-linus", "u-grace", "u-alan", "u-margaret", "u-dennis", "u-barbara", "u-tim"],
   },
   {
     id: "ws-mobile",
     name: "Mobile App",
     description: "iOS and Android companion for field teams.",
-    memberIds: ["u-ada", "u-linus", "u-grace", "u-margaret"],
     color: "#5B8DEF",
+    ownerId: "u-ada",
+    members: [
+      { userId: "u-ada", role: "owner" },
+      { userId: "u-grace", role: "project_manager" },
+      { userId: "u-margaret", role: "developer" },
+    ],
+    memberIds: ["u-ada", "u-grace", "u-margaret"],
   },
 ];
 

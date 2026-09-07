@@ -1,8 +1,9 @@
 const { AppError } = require("../utils/AppError");
 const { verifyToken } = require("../utils/tokens");
-const { getStore } = require("../store/memory.store");
+const workspaceRepo = require("../repos/workspace.repo");
+const userRepo = require("../repos/user.repo");
 
-function protect(req, res, next) {
+async function protect(req, res, next) {
   const header = req.headers.authorization;
   if (!header || !header.startsWith("Bearer ")) {
     return next(new AppError(401, "UNAUTHORIZED", "Missing authentication token."));
@@ -13,14 +14,22 @@ function protect(req, res, next) {
   }
   try {
     const payload = verifyToken(token);
-    // payload: { sub, email, name, iat, exp }
+    // payload: { sub, email, name, orgRole, iat, exp }
     req.user = {
       id: payload.sub,
       email: payload.email,
       name: payload.name,
+      orgRole: payload.orgRole || "developer",
     };
-    // Optional: check token deny-list for logout (stateless approach - client discards token)
-    // If deny-list were implemented, check here; for this phase we keep JWT stateless.
+
+    // If orgRole was not present in the JWT, look it up
+    if (!payload.orgRole) {
+      const dbUser = await userRepo.findById(req.user.id);
+      if (dbUser && dbUser.orgRole) {
+        req.user.orgRole = dbUser.orgRole;
+      }
+    }
+
     return next();
   } catch (err) {
     return next(new AppError(401, "UNAUTHORIZED", "Invalid or expired token."));
@@ -32,19 +41,37 @@ function protect(req, res, next) {
  * Usage: requireWorkspaceMember((req) => req.params.id)
  */
 function requireWorkspaceMember(getWorkspaceId) {
-  return (req, res, next) => {
+  return async (req, res, next) => {
     try {
       const workspaceId = getWorkspaceId(req);
       if (!workspaceId) {
         return next(new AppError(400, "BAD_REQUEST", "Workspace id is required."));
       }
-      const { workspaces } = getStore();
-      const workspace = workspaces.find((w) => w.id === workspaceId);
+
+      const workspace = await workspaceRepo.findById(workspaceId);
       if (!workspace) {
-        return next(new AppError(404, "NOT_FOUND", `Workspace '${workspaceId}' was not found.`));
+        return next(
+          new AppError(404, "NOT_FOUND", `Workspace '${workspaceId}' was not found.`)
+        );
       }
-      if (!req.user || !workspace.memberIds.includes(req.user.id)) {
-        return next(new AppError(403, "FORBIDDEN", "You are not a member of this workspace."));
+
+      // Senior Project Managers and Admins have access to all workspaces
+      if (
+        req.user &&
+        (req.user.orgRole === "senior_project_manager" || req.user.orgRole === "admin")
+      ) {
+        return next();
+      }
+
+      const isMember =
+        (workspace.members && workspace.members.some((m) => m.userId === req.user?.id)) ||
+        (workspace.memberIds && workspace.memberIds.includes(req.user?.id)) ||
+        workspace.ownerId === req.user?.id;
+
+      if (!req.user || !isMember) {
+        return next(
+          new AppError(403, "FORBIDDEN", "You are not a member of this workspace.")
+        );
       }
       return next();
     } catch (err) {

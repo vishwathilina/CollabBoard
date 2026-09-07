@@ -19,7 +19,12 @@ async function register({ name, email, password, avatarColor }) {
   });
 
   const publicUser = userRepo.toPublic(user);
-  const token = signToken({ sub: user.id, email: user.email, name: user.name });
+  const token = signToken({
+    sub: user.id,
+    email: user.email,
+    name: user.name,
+    orgRole: publicUser.orgRole || user.orgRole || "developer",
+  });
 
   return { user: publicUser, token, expiresIn: EXPIRES_IN };
 }
@@ -37,7 +42,12 @@ async function login({ email, password }) {
   }
 
   const publicUser = userRepo.toPublic(user);
-  const token = signToken({ sub: user.id, email: user.email, name: user.name });
+  const token = signToken({
+    sub: user.id,
+    email: user.email,
+    name: user.name,
+    orgRole: publicUser.orgRole || user.orgRole || "developer",
+  });
 
   return { user: publicUser, token, expiresIn: EXPIRES_IN };
 }

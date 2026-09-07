@@ -21,10 +21,18 @@ function memberRoleFor(userId) {
   if (userId === "u-ada") return "owner";
   if (userId === "u-grace") return "project_manager";
   if (userId === "u-linus") return "developer";
+  if (userId === "u-alan") return "developer";
+  if (userId === "u-margaret") return "developer";
+  if (userId === "u-dennis") return "qa";
+  if (userId === "u-barbara") return "designer";
+  if (userId === "u-tim") return "viewer";
   return "developer";
 }
 
 function buildMembers(workspace) {
+  if (workspace.members && workspace.members.length > 0) {
+    return workspace.members;
+  }
   return (workspace.memberIds || []).map((userId) => {
     const member = {
       userId,
@@ -59,7 +67,7 @@ async function seedMongo() {
         email: user.email.toLowerCase(),
         avatarColor: user.avatarColor,
         passwordHash,
-        orgRole: ORG_ROLES[user.id] || "developer",
+        orgRole: user.orgRole || ORG_ROLES[user.id] || "developer",
         title: "",
         bio: "",
         avatarUrl: "",
