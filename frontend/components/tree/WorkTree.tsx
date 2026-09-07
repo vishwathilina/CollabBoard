@@ -235,9 +235,7 @@ export function WorkTree({ workspaceId }: { workspaceId: string }) {
   const expandAll = () => {
     const allParentIds = new Set<string>();
     for (const n of nodes) {
-      if (nodes.some((child) => child.parentId === n.id)) {
-        allParentIds.add(n.id);
-      }
+      if (n.parentId) allParentIds.add(n.parentId);
     }
     setExpandedNodeIds(allParentIds);
   };

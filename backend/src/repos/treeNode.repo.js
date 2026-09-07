@@ -116,16 +116,19 @@ async function create({ workspaceId, parentId, name, completion }) {
 }
 
 async function update(id, patch) {
+  const updateData = {};
+  if (patch.name !== undefined) updateData.name = patch.name;
+  if (patch.parentId !== undefined) updateData.parentId = patch.parentId;
+  if (patch.completion !== undefined) updateData.completion = patch.completion;
+
   if (isMongoConnected()) {
-    const updated = await TreeNode.findByIdAndUpdate(id, patch, { new: true });
+    const updated = await TreeNode.findByIdAndUpdate(id, updateData, { new: true });
     return docToRecord(updated);
   }
 
   const node = getStore().treeNodes.find((n) => n.id === id);
   if (!node) return null;
-  if (patch.name !== undefined) node.name = patch.name;
-  if (patch.parentId !== undefined) node.parentId = patch.parentId;
-  if (patch.completion !== undefined) node.completion = patch.completion;
+  Object.assign(node, updateData);
   return { ...node };
 }
 
