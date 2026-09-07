@@ -49,6 +49,46 @@ describe("GET /api/workspaces/:id/tasks", () => {
 
     expect(res.status).toBe(403);
   });
+
+  it("returns tasks sorted by order within column", async () => {
+    const token = await loginAda(app);
+    const res = await request(app)
+      .get("/api/workspaces/ws-website/tasks")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    const tasks = res.body.data;
+    const byColumn = {};
+    for (const t of tasks) {
+      if (!byColumn[t.column]) byColumn[t.column] = [];
+      byColumn[t.column].push(t);
+    }
+    for (const col of Object.keys(byColumn)) {
+      const colTasks = byColumn[col];
+      for (let i = 0; i < colTasks.length - 1; i++) {
+        expect(colTasks[i].order).toBeLessThanOrEqual(colTasks[i + 1].order);
+      }
+    }
+  });
+
+  it("scoped developer (Linus) only sees tasks belonging to visible tree nodes", async () => {
+    const { loginLinus } = require("./helpers/auth");
+    const token = await loginLinus(app);
+
+    const res = await request(app)
+      .get("/api/workspaces/ws-website/tasks")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    // Linus only has access to tn-engineering, tn-api, tn-frontend
+    const visibleTreeNodes = ["tn-engineering", "tn-api", "tn-frontend"];
+    for (const task of res.body.data) {
+      expect(visibleTreeNodes).toContain(task.treeNodeId);
+      expect(task.treeNodeId).not.toBe("tn-design");
+      expect(task.treeNodeId).not.toBe("tn-wireframes");
+    }
+  });
 });
 
 describe("PATCH /api/tasks/:taskId/move", () => {
@@ -74,6 +114,50 @@ describe("PATCH /api/tasks/:taskId/move", () => {
     expect(res.body.success).toBe(true);
     expect(res.body.data.column).toBe(targetColumn);
     expect(res.body.data.version).toBe(initialVersion + 1);
+  });
+
+  it("moves a task with column, order, and matching version", async () => {
+    const token = await loginAda(app);
+    const store = getStore();
+    const task = store.tasks.find((t) => t.workspaceId === "ws-website");
+    expect(task).toBeDefined();
+
+    const initialVersion = task.version;
+    const targetColumn = task.column === "todo" ? "in_progress" : "todo";
+    const targetOrder = 5;
+
+    const res = await request(app)
+      .patch(`/api/tasks/${task.id}/move`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        column: targetColumn,
+        order: targetOrder,
+        version: initialVersion,
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.column).toBe(targetColumn);
+    expect(res.body.data.order).toBe(targetOrder);
+    expect(res.body.data.version).toBe(initialVersion + 1);
+  });
+
+  it("returns 409 CONFLICT when move body has stale version", async () => {
+    const token = await loginAda(app);
+    const store = getStore();
+    const task = store.tasks.find((t) => t.workspaceId === "ws-website");
+
+    const res = await request(app)
+      .patch(`/api/tasks/${task.id}/move`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        column: "done",
+        order: 1,
+        version: 9999, // stale version
+      });
+
+    expect(res.status).toBe(409);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error.code).toBe("CONFLICT");
   });
 
   it("returns 422 for an invalid column value", async () => {

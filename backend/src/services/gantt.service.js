@@ -2,6 +2,7 @@ const { AppError } = require("../utils/AppError");
 const taskRepo = require("../repos/task.repo");
 const treeNodeRepo = require("../repos/treeNode.repo");
 const workspaceRepo = require("../repos/workspace.repo");
+const rbacService = require("./rbac.service");
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MIN_BAR_PERCENT = 4;
@@ -115,7 +116,13 @@ async function getGantt(workspaceId, requesterId) {
     throw new AppError(403, "FORBIDDEN", "You are not a member of this workspace.");
   }
 
-  const tasks = taskRepo.findByWorkspace(workspaceId);
+  const allTreeNodes = await treeNodeRepo.findByWorkspace(workspaceId);
+  const user = typeof requesterId === "object" ? requesterId : { id: requesterId };
+  const visibleNodeIds = new Set(rbacService.filterTreeNodeIds(workspace, user, allTreeNodes));
+
+  const treeNodes = allTreeNodes.filter((node) => visibleNodeIds.has(node.id));
+  const allTasks = await taskRepo.findByWorkspace(workspaceId);
+  const tasks = allTasks.filter((task) => visibleNodeIds.has(task.treeNodeId));
   const ranges = tasks.map(taskRange).filter((item) => item !== null);
 
   if (ranges.length === 0) {
@@ -128,7 +135,6 @@ async function getGantt(workspaceId, requesterId) {
   const axisEndMs = addUtcDays(utcDay(maxDue), 1);
   const spanMs = Math.max(axisEndMs - axisStartMs, DAY_MS);
   const tickMs = axisTicks(axisStartMs, axisEndMs);
-  const treeNodes = await treeNodeRepo.findByWorkspace(workspaceId);
   const rawGroups = groupByTreeNode(ranges, treeNodes);
 
   const groups = rawGroups.map((group) => ({

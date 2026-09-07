@@ -31,12 +31,22 @@ let store = {
   attachments: [],
 };
 
+function assignTaskOrders(tasks) {
+  const counters = new Map();
+  return tasks.map((task) => {
+    const key = `${task.workspaceId}:${task.column}`;
+    const order = typeof task.order === "number" ? task.order : (counters.get(key) || 0);
+    counters.set(key, order + 1);
+    return { ...task, order, version: task.version ?? 1 };
+  });
+}
+
 function loadSeed() {
   store.users = clone(seed.users);
   ensurePasswordHashes(store.users);
   store.workspaces = clone(seed.workspaces);
   store.treeNodes = clone(seed.treeNodes);
-  store.tasks = clone(seed.tasks);
+  store.tasks = assignTaskOrders(clone(seed.tasks));
   store.messages = clone(seed.messages);
   store.attachments = clone(seed.attachments);
 }
