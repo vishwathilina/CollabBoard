@@ -41,6 +41,9 @@ export interface Task {
   startDate: string; // ISO — Gantt
   dueDate: string; // ISO — Gantt + cards
   completion: number; // 0-100
+  version?: number;
+  order?: number;
+  updatedBy?: string | null;
 }
 
 export interface TreeNode {

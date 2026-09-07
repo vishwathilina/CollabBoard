@@ -48,7 +48,12 @@ export default function BoardPage({
   return (
     <>
       <KanbanBoard workspaceId={id} />
-      <TaskDetailDrawer open={!!foundTask} task={foundTask} onClose={handleClose} />
+      <TaskDetailDrawer
+        open={!!foundTask}
+        task={foundTask}
+        onClose={handleClose}
+        onTaskUpdated={(updated) => setFoundTask(updated)}
+      />
     </>
   );
 }
