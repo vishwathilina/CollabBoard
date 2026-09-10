@@ -2,9 +2,11 @@ const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
+const { createRouteHandler } = require("uploadthing/express");
 
 const env = require("./config/env");
 const apiRouter = require("./routes");
+const { uploadRouter } = require("./uploadthing/uploadRouter");
 const { notFound } = require("./middleware/notFound.middleware");
 const { errorHandler } = require("./middleware/error.middleware");
 
@@ -20,6 +22,14 @@ app.use(
 );
 app.use(express.json());
 app.use(morgan("dev"));
+
+// UploadThing route handler
+app.use(
+  "/api/uploadthing",
+  createRouteHandler({
+    router: uploadRouter,
+  })
+);
 
 // API routes
 app.use("/api", apiRouter);
