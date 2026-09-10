@@ -14,6 +14,7 @@ const attachmentCreateSchema = z.object({
     errorMap: () => ({ message: "type must be one of image, pdf, doc, link" }),
   }),
   url: z.string().min(1, "url is required").trim(),
+  fileKey: z.string().optional().nullable(),
 });
 
 module.exports = {

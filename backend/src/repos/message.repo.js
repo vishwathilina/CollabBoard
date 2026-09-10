@@ -1,30 +1,65 @@
+const mongoose = require("mongoose");
+const { Message } = require("../models/Message");
+const { docToRecord } = require("./serialize");
 const { getStore } = require("../store/memory.store");
 const { nextId } = require("../store/ids");
 
+function isMongoConnected() {
+  return mongoose.connection && mongoose.connection.readyState === 1;
+}
+
 function findById(id) {
-  return getStore().messages.find((m) => m.id === id) || null;
+  if (isMongoConnected()) {
+    return Message.findById(id).then(docToRecord);
+  }
+  return Promise.resolve(getStore().messages.find((m) => m.id === id) || null);
 }
 
 function findByTask(taskId) {
-  return getStore()
+  if (isMongoConnected()) {
+    return Message.find({ taskId })
+      .sort({ createdAt: 1 })
+      .then((docs) => docs.map(docToRecord));
+  }
+  const messages = getStore()
     .messages.filter((m) => m.taskId === taskId)
     .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+  return Promise.resolve(messages);
 }
 
-function create({ taskId, authorId, text }) {
+async function create({ taskId, authorId, text }) {
+  const id = nextId("message");
+  const createdAt = new Date();
+
+  if (isMongoConnected()) {
+    const doc = await Message.create({
+      _id: id,
+      taskId,
+      authorId,
+      text,
+      createdAt,
+    });
+    return docToRecord(doc);
+  }
+
   const { messages } = getStore();
   const message = {
-    id: nextId("message"),
+    id,
     taskId,
     authorId,
     text,
-    createdAt: new Date().toISOString(),
+    createdAt: createdAt.toISOString(),
   };
   messages.push(message);
   return message;
 }
 
-function remove(id) {
+async function remove(id) {
+  if (isMongoConnected()) {
+    const doc = await Message.findByIdAndDelete(id);
+    return docToRecord(doc);
+  }
+
   const store = getStore();
   const idx = store.messages.findIndex((m) => m.id === id);
   if (idx === -1) return null;

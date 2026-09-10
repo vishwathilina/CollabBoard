@@ -1,11 +1,24 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Trash2, Send } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { formatDate, getUser } from "@/lib/format";
 import { apiFetch, getToken } from "@/lib/api";
 import type { MessageChannelProps } from "@/types/components";
 import type { Message, User } from "@/types";
+
+function getCurrentUserId(token: string | null): string | null {
+  if (!token) return null;
+  try {
+    const parts = token.split(".");
+    if (parts.length < 2) return null;
+    const payload = JSON.parse(atob(parts[1]));
+    return payload.sub || payload.id || null;
+  } catch {
+    return null;
+  }
+}
 
 export function MessageChannel({ taskId }: MessageChannelProps) {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -13,19 +26,25 @@ export function MessageChannel({ taskId }: MessageChannelProps) {
   const [text, setText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const loadData = async () => {
     const token = getToken();
     if (!token) return;
+    setCurrentUserId(getCurrentUserId(token));
+
     try {
       const [msgs, usrs] = await Promise.all([
         apiFetch<Message[]>(`/api/tasks/${taskId}/messages`, { token }),
         apiFetch<User[]>("/api/users", { token }),
       ]);
-      setMessages(msgs);
-      setUsers(usrs);
-    } catch (err) {
+      setMessages(Array.isArray(msgs) ? msgs : []);
+      setUsers(Array.isArray(usrs) ? usrs : []);
+      setErrorMessage(null);
+    } catch (err: any) {
       console.error(err);
+      setErrorMessage(err.message || "Failed to load messages.");
     } finally {
       setLoading(false);
     }
@@ -42,18 +61,41 @@ export function MessageChannel({ taskId }: MessageChannelProps) {
     if (!token) return;
 
     setSubmitting(true);
+    setErrorMessage(null);
     try {
-      await apiFetch(`/api/tasks/${taskId}/messages`, {
+      const created = await apiFetch<Message>(`/api/tasks/${taskId}/messages`, {
         method: "POST",
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text: text.trim() }),
         token,
       });
       setText("");
-      await loadData();
-    } catch (err) {
+      if (created && created.id) {
+        setMessages((prev) => [...prev, created]);
+      } else {
+        await loadData();
+      }
+    } catch (err: any) {
       console.error(err);
+      setErrorMessage(err.message || "Failed to post message.");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (messageId: string) => {
+    const token = getToken();
+    if (!token) return;
+
+    try {
+      await apiFetch(`/api/messages/${messageId}`, {
+        method: "DELETE",
+        token,
+      });
+      setMessages((prev) => prev.filter((m) => m.id !== messageId));
+      setErrorMessage(null);
+    } catch (err: any) {
+      console.error(err);
+      setErrorMessage(err.message || "Failed to delete message.");
     }
   };
 
@@ -66,20 +108,30 @@ export function MessageChannel({ taskId }: MessageChannelProps) {
     .sort(
       (a, b) =>
         Date.parse(a.createdAt) - Date.parse(b.createdAt) ||
-        a.id.localeCompare(b.id),
+        (a.id || "").localeCompare(b.id || "")
     );
 
   return (
     <div className="flex flex-col">
+      {errorMessage && (
+        <div className="mb-2 rounded-lg bg-red-950/30 p-2 text-xs text-red-400 border border-red-900/40">
+          {errorMessage}
+        </div>
+      )}
+
       <div className="flex max-h-64 flex-col gap-3 overflow-y-auto pr-1">
         {thread.length === 0 ? (
           <p className="text-sm text-muted">No messages yet.</p>
         ) : (
           thread.map((message) => {
             const author = getUser(users, message.authorId);
+            const isOwn = currentUserId === message.authorId;
 
             return (
-              <div key={message.id} className="flex gap-2.5">
+              <div
+                key={message.id}
+                className="group flex items-start gap-2.5 rounded-lg p-1.5 transition-colors hover:bg-surface-2/40"
+              >
                 {author ? (
                   <Avatar user={author} size="sm" />
                 ) : (
@@ -106,13 +158,24 @@ export function MessageChannel({ taskId }: MessageChannelProps) {
                     {message.text}
                   </p>
                 </div>
+                {isOwn && (
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(message.id)}
+                    aria-label="Delete message"
+                    title="Delete message"
+                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-muted hover:text-red-400"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
             );
           })
         )}
       </div>
 
-      <form onSubmit={handleSubmit} className="mt-3 flex gap-2">
+      <form onSubmit={handleSubmit} className="mt-3 flex items-center gap-2">
         <input
           type="text"
           value={text}
@@ -122,6 +185,14 @@ export function MessageChannel({ taskId }: MessageChannelProps) {
           aria-label="Message composer"
           className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-fg placeholder:text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:cursor-not-allowed"
         />
+        <button
+          type="submit"
+          disabled={submitting || !text.trim()}
+          aria-label="Send message"
+          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-fg disabled:opacity-50 hover:opacity-90 transition-opacity"
+        >
+          <Send className="h-4 w-4" />
+        </button>
       </form>
     </div>
   );

@@ -15,7 +15,10 @@ export interface Attachment {
   name: string;
   type: "image" | "pdf" | "doc" | "link";
   url: string;
+  fileKey?: string | null;
   addedBy: string; // userId
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Message {
