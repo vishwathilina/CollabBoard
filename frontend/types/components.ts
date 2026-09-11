@@ -72,6 +72,7 @@ export type TaskCardProps = {
   highlighted?: boolean;
   onClick: () => void;
   isDragging?: boolean;
+  editingUser?: import("@/types").PresenceUser | null;
 };
 
 export type KanbanColumnProps = {

@@ -4,6 +4,7 @@ const treeNodeRepo = require("../repos/treeNode.repo");
 const workspaceRepo = require("../repos/workspace.repo");
 const userRepo = require("../repos/user.repo");
 const rbacService = require("./rbac.service");
+const { eventBus } = require("../utils/eventBus");
 
 /**
  * Resolves a user object ensuring id and orgRole are present.
@@ -113,7 +114,7 @@ async function createTask(workspaceId, body, requesterId) {
   assertMemberIdsSubset(memberIds, workspace);
   assertDateOrder(body.startDate, body.dueDate);
 
-  return await taskRepo.create({
+  const created = await taskRepo.create({
     workspaceId,
     treeNodeId: body.treeNodeId,
     column: body.column,
@@ -127,6 +128,13 @@ async function createTask(workspaceId, body, requesterId) {
     order: body.order,
     updatedBy: user.id,
   });
+
+  eventBus.emit("task:created", {
+    workspaceId,
+    task: created,
+  });
+
+  return created;
 }
 
 async function getTask(taskId, requesterId) {
@@ -169,6 +177,10 @@ async function updateTask(taskId, body, requesterId) {
         { currentVersion: current.version, task: current },
       ]);
     }
+    eventBus.emit("task:updated", {
+      workspaceId: task.workspaceId,
+      task: updated,
+    });
     return updated;
   }
 
@@ -176,6 +188,10 @@ async function updateTask(taskId, body, requesterId) {
     ...patch,
     updatedBy: user.id,
     version: task.version + 1,
+  });
+  eventBus.emit("task:updated", {
+    workspaceId: task.workspaceId,
+    task: updated,
   });
   return updated;
 }
@@ -211,6 +227,10 @@ async function moveTask(taskId, body, requesterId) {
         { currentVersion: current.version, task: current },
       ]);
     }
+    eventBus.emit("task:moved", {
+      workspaceId: task.workspaceId,
+      task: updated,
+    });
     return updated;
   }
 
@@ -220,6 +240,10 @@ async function moveTask(taskId, body, requesterId) {
     updatedBy: user.id,
     version: task.version + 1,
   });
+  eventBus.emit("task:moved", {
+    workspaceId: task.workspaceId,
+    task: updated,
+  });
   return updated;
 }
 
@@ -227,6 +251,10 @@ async function deleteTask(taskId, requesterId) {
   const task = await getTaskOrThrow(taskId);
   await assertWorkspaceAndMembership(task.workspaceId, requesterId, "task:edit");
   await taskRepo.remove(taskId);
+  eventBus.emit("task:deleted", {
+    workspaceId: task.workspaceId,
+    taskId,
+  });
   return { id: taskId, deleted: true };
 }
 

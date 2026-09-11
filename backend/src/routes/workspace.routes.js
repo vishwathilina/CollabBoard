@@ -11,6 +11,8 @@ const {
   memberRemoveParamSchema,
 } = require("../schemas/workspace.schema");
 const workspaceController = require("../controllers/workspace.controller");
+const workspaceChatController = require("../controllers/workspaceChat.controller");
+const { workspaceChatMessageSchema } = require("../schemas/workspaceChat.schema");
 
 const router = express.Router();
 
@@ -53,6 +55,18 @@ router.delete(
   "/:id/members/:userId",
   validate({ params: memberRemoveParamSchema }),
   asyncHandler(workspaceController.removeMember)
+);
+
+// Workspace live chat (Member 7B)
+router.get(
+  "/:id/chat",
+  validate({ params: workspaceIdParamSchema }),
+  asyncHandler(workspaceChatController.listChat)
+);
+router.post(
+  "/:id/chat",
+  validate({ params: workspaceIdParamSchema, body: workspaceChatMessageSchema }),
+  asyncHandler(workspaceChatController.postChat)
 );
 
 module.exports = router;

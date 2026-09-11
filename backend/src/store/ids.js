@@ -7,6 +7,7 @@ const prefixMap = {
   task: "task",
   message: "msg",
   attachment: "att",
+  chat: "chat",
 };
 
 /**
@@ -29,6 +30,7 @@ function nextId(type) {
     task: store.tasks,
     message: store.messages,
     attachment: store.attachments,
+    chat: store.workspaceChatMessages,
   };
 
   const collection = collectionMap[type];
