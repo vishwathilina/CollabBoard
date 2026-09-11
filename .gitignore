@@ -34,14 +34,24 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+*.env
+atlas-credentials.env
 
 # vercel
 .vercel
 
-#guide
+# guides, plans, and reports
 collabboard-frontend-plan.md
+collabboard-backend-plan.md
+collabboard-fullstack-phase.*
+ColabBoard-Full_Plan
 member-contexts/
-
+backend-contexts/
+fullstack-contexts/
+*.docx
+*.zip
+scripts/
+/package-lock.json
 
 # typescript
 *.tsbuildinfo

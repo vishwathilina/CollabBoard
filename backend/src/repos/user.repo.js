@@ -25,7 +25,12 @@ function toPublic(user) {
 async function findById(id) {
   if (isMongoConnected()) {
     const user = await User.findById(id);
-    return docToRecord(user);
+    if (!user) return null;
+    const record = docToRecord(user);
+    if (user.passwordHash) {
+      record.passwordHash = user.passwordHash;
+    }
+    return record;
   }
   const user = getStore().users.find((u) => u.id === id);
   return user ? { ...user } : null;
@@ -35,7 +40,12 @@ async function findByEmail(email) {
   const normalized = email.toLowerCase();
   if (isMongoConnected()) {
     const user = await User.findOne({ email: normalized });
-    return docToRecord(user);
+    if (!user) return null;
+    const record = docToRecord(user);
+    if (user.passwordHash) {
+      record.passwordHash = user.passwordHash;
+    }
+    return record;
   }
   const user = getStore().users.find((u) => u.email.toLowerCase() === normalized);
   return user ? { ...user } : null;
@@ -69,7 +79,11 @@ async function create({ name, email, passwordHash, avatarColor, orgRole }) {
       avatarColor: avatarColor || "#C6F135",
       orgRole: orgRole || "developer",
     });
-    return docToRecord(user);
+    const record = docToRecord(user);
+    if (user.passwordHash) {
+      record.passwordHash = user.passwordHash;
+    }
+    return record;
   }
   const user = {
     id,

@@ -55,109 +55,86 @@ function assignTaskOrders(tasks) {
   });
 }
 
+let cachedPasswordHash = null;
+
 async function seedMongo() {
-  const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 10);
-
-  for (const user of seed.users) {
-    await User.replaceOne(
-      { _id: user.id },
-      {
-        _id: user.id,
-        name: user.name,
-        email: user.email.toLowerCase(),
-        avatarColor: user.avatarColor,
-        passwordHash,
-        orgRole: user.orgRole || ORG_ROLES[user.id] || "developer",
-        title: "",
-        bio: "",
-        avatarUrl: "",
-      },
-      { upsert: true }
-    );
+  if (!cachedPasswordHash) {
+    cachedPasswordHash = await bcrypt.hash(DEMO_PASSWORD, 10);
   }
+  const passwordHash = cachedPasswordHash;
 
-  for (const ws of seed.workspaces) {
-    await Workspace.replaceOne(
-      { _id: ws.id },
-      {
-        _id: ws.id,
-        name: ws.name,
-        description: ws.description || "",
-        color: ws.color,
-        ownerId: "u-ada",
-        members: buildMembers(ws),
-      },
-      { upsert: true }
-    );
-  }
+  const userDocs = seed.users.map((user) => ({
+    _id: user.id,
+    name: user.name,
+    email: user.email.toLowerCase(),
+    avatarColor: user.avatarColor,
+    passwordHash,
+    orgRole: user.orgRole || ORG_ROLES[user.id] || "developer",
+    title: "",
+    bio: "",
+    avatarUrl: "",
+  }));
 
-  for (const node of seed.treeNodes) {
-    await TreeNode.replaceOne(
-      { _id: node.id },
-      {
-        _id: node.id,
-        workspaceId: node.workspaceId,
-        parentId: node.parentId,
-        name: node.name,
-        completion: node.completion ?? 0,
-      },
-      { upsert: true }
-    );
-  }
+  const wsDocs = seed.workspaces.map((ws) => ({
+    _id: ws.id,
+    name: ws.name,
+    description: ws.description || "",
+    color: ws.color,
+    ownerId: "u-ada",
+    members: buildMembers(ws),
+  }));
 
-  const orderedTasks = assignTaskOrders(seed.tasks);
-  for (const task of orderedTasks) {
-    await Task.replaceOne(
-      { _id: task.id },
-      {
-        _id: task.id,
-        workspaceId: task.workspaceId,
-        treeNodeId: task.treeNodeId,
-        column: task.column,
-        title: task.title,
-        description: task.description ?? "",
-        priority: task.priority,
-        memberIds: task.memberIds ?? [],
-        startDate: task.startDate ?? null,
-        dueDate: task.dueDate ?? null,
-        completion: task.completion ?? 0,
-        version: task.version ?? 1,
-        order: task.order,
-        updatedBy: null,
-      },
-      { upsert: true }
-    );
-  }
+  const nodeDocs = seed.treeNodes.map((node) => ({
+    _id: node.id,
+    workspaceId: node.workspaceId,
+    parentId: node.parentId,
+    name: node.name,
+    completion: node.completion ?? 0,
+  }));
 
-  for (const msg of seed.messages) {
-    await Message.replaceOne(
-      { _id: msg.id },
-      {
-        _id: msg.id,
-        taskId: msg.taskId,
-        authorId: msg.authorId,
-        text: msg.text,
-        createdAt: msg.createdAt ? new Date(msg.createdAt) : new Date(),
-      },
-      { upsert: true }
-    );
-  }
+  const taskDocs = assignTaskOrders(seed.tasks).map((task) => ({
+    _id: task.id,
+    workspaceId: task.workspaceId,
+    treeNodeId: task.treeNodeId,
+    column: task.column,
+    title: task.title,
+    description: task.description ?? "",
+    priority: task.priority,
+    memberIds: task.memberIds ?? [],
+    startDate: task.startDate ?? null,
+    dueDate: task.dueDate ?? null,
+    completion: task.completion ?? 0,
+    version: task.version ?? 1,
+    order: task.order,
+    updatedBy: null,
+  }));
 
-  for (const att of seed.attachments) {
-    await Attachment.replaceOne(
-      { _id: att.id },
-      {
-        _id: att.id,
-        taskId: att.taskId,
-        name: att.name,
-        type: att.type,
-        url: att.url,
-        addedBy: att.addedBy,
-        fileKey: null,
-      },
-      { upsert: true }
-    );
-  }
+  const msgDocs = seed.messages.map((msg) => ({
+    _id: msg.id,
+    taskId: msg.taskId,
+    authorId: msg.authorId,
+    text: msg.text,
+    createdAt: msg.createdAt ? new Date(msg.createdAt) : new Date(),
+  }));
+
+  const attDocs = seed.attachments.map((att) => ({
+    _id: att.id,
+    taskId: att.taskId,
+    name: att.name,
+    type: att.type,
+    url: att.url,
+    addedBy: att.addedBy,
+    fileKey: null,
+  }));
+
+  await Promise.all([
+    Promise.all(userDocs.map((doc) => User.replaceOne({ _id: doc._id }, doc, { upsert: true }))),
+    Promise.all(wsDocs.map((doc) => Workspace.replaceOne({ _id: doc._id }, doc, { upsert: true }))),
+    Promise.all(nodeDocs.map((doc) => TreeNode.replaceOne({ _id: doc._id }, doc, { upsert: true }))),
+    Promise.all(taskDocs.map((doc) => Task.replaceOne({ _id: doc._id }, doc, { upsert: true }))),
+    Promise.all(msgDocs.map((doc) => Message.replaceOne({ _id: doc._id }, doc, { upsert: true }))),
+    Promise.all(attDocs.map((doc) => Attachment.replaceOne({ _id: doc._id }, doc, { upsert: true }))),
+  ]);
 
   return {
     users: seed.users.length,

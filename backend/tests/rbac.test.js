@@ -1,6 +1,6 @@
 const request = require("supertest");
 const app = require("../src/app");
-const { reset, getStore } = require("../src/store/memory.store");
+const { clearTestDb, seedTestDb } = require("./helpers/db");
 const { loginAda, loginLinus, loginAs } = require("./helpers/auth");
 const {
   getMembership,
@@ -10,8 +10,9 @@ const {
   canMoveTask,
 } = require("../src/services/rbac.service");
 
-beforeEach(() => {
-  reset();
+beforeEach(async () => {
+  await clearTestDb();
+  await seedTestDb();
 });
 
 describe("RBAC Helper Functions", () => {

@@ -1,12 +1,13 @@
 const request = require("supertest");
 const app = require("../src/app");
-const { reset } = require("../src/store/memory.store");
+const { clearTestDb, seedTestDb } = require("./helpers/db");
 const { loginAda } = require("./helpers/auth");
 
 const MIN_BAR_PERCENT = 4;
 
-beforeEach(() => {
-  reset();
+beforeEach(async () => {
+  await clearTestDb();
+  await seedTestDb();
 });
 
 describe("GET /api/workspaces/:id/gantt", () => {
