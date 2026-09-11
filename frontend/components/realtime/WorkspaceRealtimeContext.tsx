@@ -7,6 +7,7 @@ import React, {
   useState,
   useCallback,
   useRef,
+  useMemo,
 } from "react";
 import { getSocket } from "@/lib/socket";
 import { apiFetch, getToken } from "@/lib/api";
@@ -108,6 +109,14 @@ export function WorkspaceRealtimeProvider({
       socket?.emit("workspace:join", { workspaceId }, (res?: { success: boolean; error?: string }) => {
         if (res && !res.success) {
           console.warn("Failed to join workspace socket room:", res.error);
+        } else {
+          // Replay active editing task after join or reconnect
+          if (currentEditingTaskRef.current) {
+            socket?.emit("presence:update", {
+              workspaceId,
+              editingTaskId: currentEditingTaskRef.current,
+            });
+          }
         }
       });
     }
@@ -228,7 +237,16 @@ export function WorkspaceRealtimeProvider({
         `/api/workspaces/${workspaceId}/chat`,
         { token }
       );
-      setChatMessages(Array.isArray(messages) ? messages : []);
+      // Merge and deduplicate with live messages received while in-flight
+      setChatMessages((prev) => {
+        const fetched = Array.isArray(messages) ? messages : [];
+        const map = new Map<string, WorkspaceChatMessage>();
+        fetched.forEach((m) => map.set(m.id, m));
+        prev.forEach((m) => map.set(m.id, m));
+        return Array.from(map.values()).sort(
+          (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        );
+      });
     } catch (err: unknown) {
       console.error("Failed to load chat history:", err);
       setChatError(err instanceof Error ? err.message : "Failed to load chat history");
@@ -310,22 +328,40 @@ export function WorkspaceRealtimeProvider({
     [workspaceId]
   );
 
-  const value: WorkspaceRealtimeContextValue = {
-    workspaceId,
-    onlineUsers,
-    editingMap,
-    chatMessages,
-    isChatOpen,
-    setIsChatOpen,
-    setEditingTask,
-    sendChatMessage,
-    loadChatHistory,
-    chatLoading,
-    chatError,
-    emitTaskMoved,
-    subscribe,
-    isConnected,
-  };
+  const value: WorkspaceRealtimeContextValue = useMemo(
+    () => ({
+      workspaceId,
+      onlineUsers,
+      editingMap,
+      chatMessages,
+      isChatOpen,
+      setIsChatOpen,
+      setEditingTask,
+      sendChatMessage,
+      loadChatHistory,
+      chatLoading,
+      chatError,
+      emitTaskMoved,
+      subscribe,
+      isConnected,
+    }),
+    [
+      workspaceId,
+      onlineUsers,
+      editingMap,
+      chatMessages,
+      isChatOpen,
+      setIsChatOpen,
+      setEditingTask,
+      sendChatMessage,
+      loadChatHistory,
+      chatLoading,
+      chatError,
+      emitTaskMoved,
+      subscribe,
+      isConnected,
+    ]
+  );
 
   return (
     <WorkspaceRealtimeContext.Provider value={value}>

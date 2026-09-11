@@ -3,6 +3,7 @@ const env = require("../config/env");
 const { verifyToken } = require("../utils/tokens");
 const userRepo = require("../repos/user.repo");
 const workspaceRepo = require("../repos/workspace.repo");
+const treeNodeRepo = require("../repos/treeNode.repo");
 const rbacService = require("../services/rbac.service");
 const workspaceChatService = require("../services/workspaceChat.service");
 const { eventBus } = require("../utils/eventBus");
@@ -257,15 +258,6 @@ function initSocket(httpServer) {
       }
     });
 
-    // Task moved over socket (if client emits after DnD)
-    socket.on("task:moved", ({ workspaceId, task }) => {
-      if (!workspaceId || !task) return;
-      socket.to(`workspace:${workspaceId}`).emit("task:moved", {
-        workspaceId,
-        task,
-      });
-    });
-
     socket.on("disconnect", () => {
       removeSocketFromPresence(io, socket);
     });
@@ -291,26 +283,123 @@ function initSocket(httpServer) {
     }
   }, 15000);
 
-  // Forward eventBus events to Socket.io rooms
-  eventBus.on("task:moved", ({ workspaceId, task }) => {
-    io.to(`workspace:${workspaceId}`).emit("task:moved", { workspaceId, task });
-  });
+  // Helper to deliver task events respecting RBAC tree scope and revoking non-members
+  async function dispatchTaskEvent(eventName, { workspaceId, task, taskId }) {
+    const room = `workspace:${workspaceId}`;
+    let sockets;
+    try {
+      sockets = await io.in(room).fetchSockets();
+    } catch {
+      sockets = [];
+    }
+    if (!sockets || sockets.length === 0) return;
 
-  eventBus.on("task:created", ({ workspaceId, task }) => {
-    io.to(`workspace:${workspaceId}`).emit("task:created", { workspaceId, task });
-  });
+    const workspace = await workspaceRepo.findById(workspaceId);
+    if (!workspace) return;
 
-  eventBus.on("task:updated", ({ workspaceId, task }) => {
-    io.to(`workspace:${workspaceId}`).emit("task:updated", { workspaceId, task });
-  });
+    let allNodes = null;
 
-  eventBus.on("task:deleted", ({ workspaceId, taskId }) => {
-    io.to(`workspace:${workspaceId}`).emit("task:deleted", { workspaceId, taskId });
-  });
+    for (const s of sockets) {
+      try {
+        const membership = rbacService.getMembership(workspace, s.user);
+        const isSeniorPM =
+          s.user?.orgRole === "senior_project_manager" || s.user?.orgRole === "admin";
 
-  eventBus.on("tree:updated", (data) => {
-    io.to(`workspace:${data.workspaceId}`).emit("tree:updated", data);
-  });
+        // Evict sockets whose workspace membership has been removed
+        if (!isSeniorPM && !membership) {
+          s.leave(room);
+          s.joinedWorkspaces?.delete(workspaceId);
+          continue;
+        }
+
+        // For scoped developers and designers, filter out tasks outside visibleTreeNodeIds
+        if (
+          !isSeniorPM &&
+          task?.treeNodeId &&
+          membership &&
+          ["developer", "designer"].includes(membership.role)
+        ) {
+          if (!allNodes) {
+            allNodes = await treeNodeRepo.findByWorkspace(workspaceId);
+          }
+          const visibleIds = new Set(
+            rbacService.filterTreeNodeIds(workspace, s.user, allNodes)
+          );
+          if (!visibleIds.has(task.treeNodeId)) {
+            // Task is outside this user's tree scope, do not leak
+            continue;
+          }
+        }
+
+        s.emit(eventName, { workspaceId, task, taskId });
+      } catch (err) {
+        console.error("Error dispatching task event to socket:", err);
+      }
+    }
+  }
+
+  // Helper to deliver tree events respecting RBAC tree scope
+  async function dispatchTreeEvent(data) {
+    const workspaceId = data.workspaceId;
+    const room = `workspace:${workspaceId}`;
+    let sockets;
+    try {
+      sockets = await io.in(room).fetchSockets();
+    } catch {
+      sockets = [];
+    }
+    if (!sockets || sockets.length === 0) return;
+
+    const workspace = await workspaceRepo.findById(workspaceId);
+    if (!workspace) return;
+
+    let allNodes = null;
+
+    for (const s of sockets) {
+      try {
+        const membership = rbacService.getMembership(workspace, s.user);
+        const isSeniorPM =
+          s.user?.orgRole === "senior_project_manager" || s.user?.orgRole === "admin";
+
+        if (!isSeniorPM && !membership) {
+          s.leave(room);
+          s.joinedWorkspaces?.delete(workspaceId);
+          continue;
+        }
+
+        // Scoped developers/designers should not receive hidden tree node payload
+        if (
+          !isSeniorPM &&
+          data.node &&
+          membership &&
+          ["developer", "designer"].includes(membership.role)
+        ) {
+          if (!allNodes) {
+            allNodes = await treeNodeRepo.findByWorkspace(workspaceId);
+          }
+          const visibleIds = new Set(
+            rbacService.filterTreeNodeIds(workspace, s.user, allNodes)
+          );
+          if (!visibleIds.has(data.node.id) && !visibleIds.has(data.node.parentId)) {
+            // Send invalidation signal without leaking hidden node details
+            s.emit("tree:updated", { workspaceId });
+            continue;
+          }
+        }
+
+        s.emit("tree:updated", data);
+      } catch (err) {
+        console.error("Error dispatching tree event to socket:", err);
+      }
+    }
+  }
+
+  // Forward eventBus events with RBAC tree node filtering and membership validation
+  eventBus.on("task:moved", (payload) => dispatchTaskEvent("task:moved", payload));
+  eventBus.on("task:created", (payload) => dispatchTaskEvent("task:created", payload));
+  eventBus.on("task:updated", (payload) => dispatchTaskEvent("task:updated", payload));
+  eventBus.on("task:deleted", (payload) => dispatchTaskEvent("task:deleted", payload));
+  eventBus.on("tree:updated", (payload) => dispatchTreeEvent(payload));
 
   eventBus.on("comment:message", ({ workspaceId, message, taskId }) => {
     io.to(`workspace:${workspaceId}`).emit("comment:message", {

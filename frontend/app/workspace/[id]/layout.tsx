@@ -112,7 +112,7 @@ export default function WorkspaceLayout({
   const isViewer = Boolean(!isSeniorPM && !isOwner && myMember?.role === "viewer");
 
   return (
-    <WorkspaceRealtimeProvider workspaceId={id} currentUser={currentUser}>
+    <WorkspaceRealtimeProvider key={id} workspaceId={id} currentUser={currentUser}>
       <WorkspaceLayoutContent
         workspace={workspace}
         members={members}

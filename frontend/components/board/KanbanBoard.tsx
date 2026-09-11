@@ -113,9 +113,18 @@ export function KanbanBoard({
   useEffect(() => {
     if (!realtime?.subscribe) return;
 
+    const matchesFilter = (task: Task) => {
+      if (!treeNodeId) return true;
+      return task.treeNodeId === treeNodeId;
+    };
+
     const unsubMoved = realtime.subscribe("task:moved", (data: { workspaceId: string; task: Task }) => {
       if (data?.task) {
         setTasks((prev) => {
+          if (!matchesFilter(data.task)) {
+            // Task no longer belongs to filtered tree node, remove from board
+            return prev.filter((t) => t.id !== data.task.id);
+          }
           const exists = prev.some((t) => t.id === data.task.id);
           if (!exists) return [...prev, data.task].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
           return prev.map((t) => (t.id === data.task.id ? data.task : t)).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
@@ -125,6 +134,7 @@ export function KanbanBoard({
 
     const unsubCreated = realtime.subscribe("task:created", (data: { workspaceId: string; task: Task }) => {
       if (data?.task) {
+        if (!matchesFilter(data.task)) return;
         setTasks((prev) => {
           if (prev.some((t) => t.id === data.task.id)) return prev;
           return [...prev, data.task].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
@@ -134,7 +144,14 @@ export function KanbanBoard({
 
     const unsubUpdated = realtime.subscribe("task:updated", (data: { workspaceId: string; task: Task }) => {
       if (data?.task) {
-        setTasks((prev) => prev.map((t) => (t.id === data.task.id ? data.task : t)));
+        setTasks((prev) => {
+          if (!matchesFilter(data.task)) {
+            return prev.filter((t) => t.id !== data.task.id);
+          }
+          const exists = prev.some((t) => t.id === data.task.id);
+          if (!exists) return [...prev, data.task].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+          return prev.map((t) => (t.id === data.task.id ? data.task : t));
+        });
       }
     });
 
@@ -156,7 +173,7 @@ export function KanbanBoard({
       unsubDeleted();
       unsubTree();
     };
-  }, [realtime, loadData]);
+  }, [realtime, loadData, treeNodeId]);
 
   // Pointer sensor requires 5px movement so simple clicks activate card selection instead
   const sensors = useSensors(
@@ -293,7 +310,6 @@ export function KanbanBoard({
       );
 
       onTaskMoved?.(movedTask);
-      realtime?.emitTaskMoved(movedTask);
     } catch (err: unknown) {
       if (err instanceof ApiError && (err.status === 409 || err.code === "CONFLICT")) {
         showToast("Task conflict: This card was modified by someone else. Reloading...", "conflict");

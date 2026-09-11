@@ -20,9 +20,9 @@ function findByWorkspace(workspaceId, { limit = 50 } = {}) {
   const numericLimit = Math.max(1, Math.min(100, parseInt(limit, 10) || 50));
   if (isMongoConnected()) {
     return WorkspaceChatMessage.find({ workspaceId })
-      .sort({ createdAt: 1 })
+      .sort({ createdAt: -1 })
       .limit(numericLimit)
-      .then((docs) => docs.map(docToRecord));
+      .then((docs) => docs.reverse().map(docToRecord));
   }
   const messages = (getStore().workspaceChatMessages || [])
     .filter((m) => m.workspaceId === workspaceId)
@@ -32,10 +32,10 @@ function findByWorkspace(workspaceId, { limit = 50 } = {}) {
 }
 
 async function create({ workspaceId, authorId, text }) {
-  const id = nextId("chat");
   const createdAt = new Date();
 
   if (isMongoConnected()) {
+    const id = `chat-${new mongoose.Types.ObjectId().toString()}`;
     const doc = await WorkspaceChatMessage.create({
       _id: id,
       workspaceId,
@@ -45,6 +45,8 @@ async function create({ workspaceId, authorId, text }) {
     });
     return docToRecord(doc);
   }
+
+  const id = nextId("chat");
 
   const store = getStore();
   if (!store.workspaceChatMessages) {

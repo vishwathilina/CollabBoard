@@ -66,18 +66,19 @@ export function TaskDetailDrawer({
   }, [task]);
 
   const realtime = useOptionalWorkspaceRealtime();
+  const setEditingTask = realtime?.setEditingTask;
 
   // Notify socket presence that this task is being viewed/edited (Member 7A)
   useEffect(() => {
-    if (visible && task?.id) {
-      realtime?.setEditingTask(task.id);
+    if (visible && task?.id && setEditingTask) {
+      setEditingTask(task.id);
     }
     return () => {
-      if (task?.id) {
-        realtime?.setEditingTask(null);
+      if (task?.id && setEditingTask) {
+        setEditingTask(null);
       }
     };
-  }, [visible, task?.id, realtime]);
+  }, [visible, task?.id, setEditingTask]);
 
   useEffect(() => {
     if (!visible) return;

@@ -66,7 +66,28 @@ async function attachAuthorDetails(message) {
 async function listMessages(workspaceId, userOrId, { limit = 50 } = {}) {
   await assertWorkspaceAndMembership(workspaceId, userOrId, "workspace:read");
   const messages = await workspaceChatRepo.findByWorkspace(workspaceId, { limit });
-  return await Promise.all(messages.map(attachAuthorDetails));
+  if (messages.length === 0) return [];
+
+  // Batch-load distinct authors to avoid N+1 query pattern
+  const authorIds = [...new Set(messages.map((m) => m.authorId).filter(Boolean))];
+  const authorDocs = await Promise.all(authorIds.map((id) => userRepo.findById(id)));
+  const authorMap = new Map();
+  for (const author of authorDocs) {
+    if (author) {
+      authorMap.set(author.id, {
+        id: author.id,
+        name: author.name,
+        email: author.email,
+        avatarColor: author.avatarColor || "#6366F1",
+        avatarUrl: author.avatarUrl || null,
+      });
+    }
+  }
+
+  return messages.map((m) => {
+    const author = authorMap.get(m.authorId);
+    return author ? { ...m, author } : m;
+  });
 }
 
 async function createMessage(workspaceId, { text }, userOrId) {
@@ -76,12 +97,19 @@ async function createMessage(workspaceId, { text }, userOrId) {
     ]);
   }
 
+  const trimmed = text.trim();
+  if (trimmed.length > 2000) {
+    throw new AppError(422, "VALIDATION_ERROR", "Message text cannot exceed 2000 characters.", [
+      { path: "body.text", message: "Message text cannot exceed 2000 characters." },
+    ]);
+  }
+
   const { user } = await assertWorkspaceAndMembership(workspaceId, userOrId, "chat:post");
 
   const created = await workspaceChatRepo.create({
     workspaceId,
     authorId: user.id,
-    text: text.trim(),
+    text: trimmed,
   });
 
   const fullMessage = await attachAuthorDetails(created);

@@ -15,12 +15,16 @@ export function getSocket(token?: string | null): Socket | null {
     return null;
   }
 
-  // If already connected with same token, reuse existing socket
-  if (socket && currentToken === token && socket.connected) {
+  // If already created with same token, reuse existing socket instance
+  // without dropping existing listeners during transient disconnects
+  if (socket && currentToken === token) {
+    if (!socket.connected && !socket.active) {
+      socket.connect();
+    }
     return socket;
   }
 
-  // If token changed or socket disconnected, recreate
+  // Token changed: disconnect old socket and instantiate new one
   if (socket) {
     socket.disconnect();
   }
