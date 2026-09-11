@@ -24,6 +24,7 @@ import { KanbanColumn } from "./KanbanColumn";
 import { TaskCard, SortableTaskCard } from "./TaskCard";
 import { CreateTaskModal } from "./CreateTaskModal";
 import { apiFetch, getToken, ApiError } from "@/lib/api";
+import { useOptionalWorkspaceRealtime } from "@/components/realtime/WorkspaceRealtimeContext";
 import type { TaskColumn, Task, User, TreeNode } from "@/types";
 
 const COLUMNS: { id: TaskColumn; title: string }[] = [
@@ -101,9 +102,78 @@ export function KanbanBoard({
     }
   }, [workspaceId, treeNodeId]);
 
+  const realtime = useOptionalWorkspaceRealtime();
+  const editingMap = realtime?.editingMap || {};
+
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Subscribe to live task events via socket (Member 7A)
+  useEffect(() => {
+    if (!realtime?.subscribe) return;
+
+    const matchesFilter = (task: Task) => {
+      if (!treeNodeId) return true;
+      return task.treeNodeId === treeNodeId;
+    };
+
+    const unsubMoved = realtime.subscribe("task:moved", (data: { workspaceId: string; task: Task }) => {
+      if (data?.task) {
+        setTasks((prev) => {
+          if (!matchesFilter(data.task)) {
+            // Task no longer belongs to filtered tree node, remove from board
+            return prev.filter((t) => t.id !== data.task.id);
+          }
+          const exists = prev.some((t) => t.id === data.task.id);
+          if (!exists) return [...prev, data.task].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+          return prev.map((t) => (t.id === data.task.id ? data.task : t)).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+        });
+      }
+    });
+
+    const unsubCreated = realtime.subscribe("task:created", (data: { workspaceId: string; task: Task }) => {
+      if (data?.task) {
+        if (!matchesFilter(data.task)) return;
+        setTasks((prev) => {
+          if (prev.some((t) => t.id === data.task.id)) return prev;
+          return [...prev, data.task].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+        });
+      }
+    });
+
+    const unsubUpdated = realtime.subscribe("task:updated", (data: { workspaceId: string; task: Task }) => {
+      if (data?.task) {
+        setTasks((prev) => {
+          if (!matchesFilter(data.task)) {
+            return prev.filter((t) => t.id !== data.task.id);
+          }
+          const exists = prev.some((t) => t.id === data.task.id);
+          if (!exists) return [...prev, data.task].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+          return prev.map((t) => (t.id === data.task.id ? data.task : t));
+        });
+      }
+    });
+
+    const unsubDeleted = realtime.subscribe("task:deleted", (data: { workspaceId: string; taskId: string }) => {
+      if (data?.taskId) {
+        setTasks((prev) => prev.filter((t) => t.id !== data.taskId));
+      }
+    });
+
+    const unsubTree = realtime.subscribe("tree:updated", () => {
+      // Reload tree / tasks if tree hierarchy changed
+      loadData();
+    });
+
+    return () => {
+      unsubMoved();
+      unsubCreated();
+      unsubUpdated();
+      unsubDeleted();
+      unsubTree();
+    };
+  }, [realtime, loadData, treeNodeId]);
 
   // Pointer sensor requires 5px movement so simple clicks activate card selection instead
   const sensors = useSensors(
@@ -351,6 +421,7 @@ export function KanbanBoard({
                           task={t}
                           members={members}
                           highlighted={t.id === taskId}
+                          editingUser={editingMap[t.id] || null}
                           onClick={() => {
                             const params = new URLSearchParams(searchParams.toString());
                             params.set("task", t.id);

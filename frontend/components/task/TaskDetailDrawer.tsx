@@ -10,6 +10,7 @@ import { MessageChannel } from "@/components/task/MessageChannel";
 import { AttachmentList } from "@/components/task/AttachmentList";
 import { formatDate, getUsers } from "@/lib/format";
 import { apiFetch, getToken, ApiError } from "@/lib/api";
+import { useOptionalWorkspaceRealtime } from "@/components/realtime/WorkspaceRealtimeContext";
 import type { Task, User } from "@/types";
 
 type DrawerTab = "messages" | "attachments";
@@ -63,6 +64,21 @@ export function TaskDetailDrawer({
         .catch(console.error);
     }
   }, [task]);
+
+  const realtime = useOptionalWorkspaceRealtime();
+  const setEditingTask = realtime?.setEditingTask;
+
+  // Notify socket presence that this task is being viewed/edited (Member 7A)
+  useEffect(() => {
+    if (visible && task?.id && setEditingTask) {
+      setEditingTask(task.id);
+    }
+    return () => {
+      if (task?.id && setEditingTask) {
+        setEditingTask(null);
+      }
+    };
+  }, [visible, task?.id, setEditingTask]);
 
   useEffect(() => {
     if (!visible) return;

@@ -4,6 +4,7 @@ const workspaceRepo = require("../repos/workspace.repo");
 const userRepo = require("../repos/user.repo");
 const taskRepo = require("../repos/task.repo");
 const rbacService = require("./rbac.service");
+const { eventBus } = require("../utils/eventBus");
 const { getStore } = require("../store/memory.store");
 
 /**
@@ -182,6 +183,7 @@ async function createNode(workspaceId, { parentId, name, completion }, userOrId)
     name,
     completion,
   });
+  eventBus.emit("tree:updated", { workspaceId, node });
   return node;
 }
 
@@ -253,6 +255,7 @@ async function updateNode(nodeId, patch, userOrId) {
   }
 
   const updated = await treeNodeRepo.update(nodeId, patch);
+  eventBus.emit("tree:updated", { workspaceId: node.workspaceId, node: updated });
   return updated;
 }
 
@@ -282,6 +285,7 @@ async function deleteNode(nodeId, userOrId) {
   }
 
   const deleted = await treeNodeRepo.remove(nodeId);
+  eventBus.emit("tree:updated", { workspaceId: node.workspaceId, nodeId, deleted: true });
   return deleted;
 }
 

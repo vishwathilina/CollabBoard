@@ -29,6 +29,7 @@ let store = {
   tasks: [],
   messages: [],
   attachments: [],
+  workspaceChatMessages: [],
 };
 
 function assignTaskOrders(tasks) {
@@ -49,6 +50,7 @@ function loadSeed() {
   store.tasks = assignTaskOrders(clone(seed.tasks));
   store.messages = clone(seed.messages);
   store.attachments = clone(seed.attachments);
+  store.workspaceChatMessages = seed.workspaceChatMessages ? clone(seed.workspaceChatMessages) : [];
 }
 
 // Initial load

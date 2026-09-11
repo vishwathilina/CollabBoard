@@ -91,3 +91,30 @@ export interface Workspace {
 }
 
 export type WorkspaceView = "tree" | "board" | "gantt" | "settings";
+
+export interface PresenceUser {
+  userId: string;
+  id?: string;
+  name: string;
+  email: string;
+  avatarColor: string;
+  avatarUrl?: string | null;
+  orgRole?: string;
+  editingTaskId?: string | null;
+  lastSeen?: number;
+}
+
+export interface WorkspaceChatMessage {
+  id: string;
+  workspaceId: string;
+  authorId: string;
+  text: string;
+  createdAt: string;
+  author?: {
+    id: string;
+    name: string;
+    email: string;
+    avatarColor: string;
+    avatarUrl?: string | null;
+  };
+}
