@@ -1,0 +1,15 @@
+# CollabBoard frontend (Next.js) on Netlify
+# Site settings: leave Base directory empty (uses this file's [build].base)
+
+[build]
+  base = "frontend"
+  # Plain next build is more reliable on Netlify than `next build --turbopack`
+  command = "npx next build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "22"
+  NEXT_TELEMETRY_DISABLED = "1"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
