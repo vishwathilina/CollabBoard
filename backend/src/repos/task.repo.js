@@ -76,7 +76,7 @@ async function getNextOrder(workspaceId, column) {
 }
 
 async function create(fields) {
-  const id = fields.id || nextId("task");
+  const id = fields.id || (await nextId("task"));
   const order =
     typeof fields.order === "number"
       ? fields.order

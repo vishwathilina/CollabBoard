@@ -88,7 +88,7 @@ async function getDescendantIds(nodeId) {
 }
 
 async function create({ workspaceId, parentId, name, completion }) {
-  const id = nextId("treeNode");
+  const id = await nextId("treeNode");
   const normalizedParent = parentId === undefined ? null : parentId;
   const initialCompletion = completion !== undefined ? completion : 0;
 

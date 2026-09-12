@@ -93,7 +93,7 @@ async function create({ name, description, color, ownerId, creatorId, members })
     Array.isArray(members) && members.length > 0
       ? members
       : [{ userId: actualOwner, role: "owner" }];
-  const id = nextId("workspace");
+  const id = await nextId("workspace");
 
   if (isMongoConnected()) {
     const created = await Workspace.create({

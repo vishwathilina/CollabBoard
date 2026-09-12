@@ -109,6 +109,25 @@ describe("POST /api/workspaces — create", () => {
     expect(typeof res.body.data.id).toBe("string");
   });
 
+  it("creates sequential workspace ids without duplicate key errors", async () => {
+    const token = await loginAda(app);
+
+    const first = await request(app)
+      .post("/api/workspaces")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ name: "Project A" });
+    const second = await request(app)
+      .post("/api/workspaces")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ name: "Project B" });
+
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(201);
+    expect(first.body.data.id).toBe("ws-03");
+    expect(second.body.data.id).toBe("ws-04");
+    expect(first.body.data.id).not.toBe(second.body.data.id);
+  });
+
   it("returns 422 for missing name", async () => {
     const token = await loginAda(app);
     const res = await request(app)

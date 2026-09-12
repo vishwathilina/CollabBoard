@@ -28,7 +28,7 @@ function findByTask(taskId) {
 }
 
 async function create({ taskId, authorId, text }) {
-  const id = nextId("message");
+  const id = await nextId("message");
   const createdAt = new Date();
 
   if (isMongoConnected()) {

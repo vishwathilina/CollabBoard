@@ -29,7 +29,7 @@ function findByTask(taskId) {
 }
 
 async function create({ taskId, name, type, url, fileKey = null, addedBy }) {
-  const id = nextId("attachment");
+  const id = await nextId("attachment");
   if (isMongoConnected()) {
     const doc = await Attachment.create({
       _id: id,

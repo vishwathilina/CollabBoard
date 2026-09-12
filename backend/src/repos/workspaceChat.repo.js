@@ -46,7 +46,7 @@ async function create({ workspaceId, authorId, text }) {
     return docToRecord(doc);
   }
 
-  const id = nextId("chat");
+  const id = await nextId("chat");
 
   const store = getStore();
   if (!store.workspaceChatMessages) {
