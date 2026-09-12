@@ -1,76 +1,132 @@
 # CollabBoard
 
-Full-stack collaborative workspace: Dashboard, Work Tree, Kanban Board, Task Detail, and Gantt. The **Next.js** frontend (`:3000`) talks to an **Express** REST API (`:4000`) backed by **MongoDB Atlas** via Mongoose. Public string ids (`u-ada`, `ws-website`, …) are preserved for demos.
+Full-stack collaborative workspace: Dashboard, Work Tree, Kanban Board (DnD), Task Detail Drawer, Gantt Chart, Realtime Workspace Chat, Socket.io Presence, and File Uploads via UploadThing.
+
+The **Next.js** frontend (`:3000`) communicates with an **Express** REST API (`:4000`) backed by **MongoDB Atlas** via Mongoose, with realtime bidirectional updates powered by Socket.io. Public string IDs (`u-ada`, `ws-website`, `task-01`, …) are preserved for deterministic testing and demos.
+
+---
 
 ## Architecture
 
 ```mermaid
 flowchart LR
   subgraph client [Next.js :3000]
-    Pages[Pages]
+    Pages[Pages & Layouts]
     ApiTs[lib/api.ts]
+    UTClient[UploadThing React]
+    SocketClient[Socket.io Client]
   end
+
   subgraph server [Express :4000]
-    Routes[routes]
-    Ctrl[controllers]
-    Svc[services]
-    Repos[repos]
-    Models[Mongoose models]
-    JWT[auth middleware]
+    Routes[Routes]
+    Ctrl[Controllers]
+    Svc[Services & RBAC]
+    Repos[Repositories]
+    Models[Mongoose Models]
+    JWT[Auth Middleware]
+    UTRoute[/api/uploadthing]
+    SocketServer[Socket.io Server]
   end
+
   Atlas[(MongoDB Atlas)]
+  UTCloud[(UploadThing CDN)]
+
   Pages --> ApiTs
+  Pages --> UTClient
+  Pages --> SocketClient
+
   ApiTs -->|Bearer JWT| Routes
+  UTClient -->|Upload File| UTRoute
+  SocketClient <-->|Presence & Chat| SocketServer
+
+  Routes --> JWT
   Routes --> Ctrl
   Ctrl --> Svc
   Svc --> Repos
   Repos --> Models
   Models --> Atlas
-  Routes --> JWT
+
+  UTRoute --> UTCloud
+  UTRoute -->|onUploadComplete| Repos
 ```
 
-The backend is layered **routes → controllers → services → repos → Mongoose → Atlas**. CORS allows `http://localhost:3000`. Auth uses **Bearer JWT** (stored in `localStorage` on the client) so Postman and the frontend share the same scheme.
+The backend follows a strict layered pattern: **routes → controllers → services → repos → Mongoose → Atlas**. Auth utilizes **Bearer JWT** (stored in client `localStorage` and sent in HTTP Authorization headers and Socket.io handshake auth).
 
-### Embed vs reference
+---
 
-| Thing | Decision | Why |
+## Data Modeling — Embed vs Reference
+
+| Entity | Storage Decision | Rationale |
 |---|---|---|
-| Kanban columns | **Not a collection.** Frozen enum `todo \| in_progress \| review \| done` | Bounded, never grow |
-| Workspace members + **role** + visibility | **Embedded array** on Workspace | Tens of members; always loaded with workspace |
-| Tree nodes | **Own collection** | Nested; queried as a tree; developers see a subset |
-| Tasks | **Own collection** | Unbounded; edited/dragged constantly |
-| Task comments (`Message`) | **Own collection** | Grow without bound |
-| Workspace chat | **Own collection** | High write rate; independent of tasks |
-| Users | **Own collection** | Shared across workspaces; unique email |
-| Presence | **Not stored** (Socket.io memory) | Ephemeral |
-| Activity / audit | **Own collection** | “Ada moved task-12 to review” |
+| Kanban columns | **Enum (`todo \| in_progress \| review \| done`)** | Fixed domain set; bounded; strictly validated |
+| Workspace members + role + visibility | **Embedded array in Workspace** | Tens of members; always loaded together with workspace for RBAC evaluation |
+| Tree nodes | **Own collection (`TreeNode`)** | Hierarchical; queried recursively; scoped by member visibility |
+| Tasks | **Own collection (`Task`)** | High mutation rate; optimistic locking (`version`); reordered with `order` |
+| Task messages / comments | **Own collection (`Message`)** | Unbounded growth per task thread |
+| Workspace chat messages | **Own collection (`WorkspaceChatMessage`)** | High write velocity; real-time broadcast via Socket.io |
+| Attachments | **Own collection (`Attachment`)** | Tied to UploadThing files (`fileKey`, `url`, `type`) |
+| Users | **Own collection (`User`)** | Shared across workspaces; unique email; global `orgRole` |
+| Presence | **In-memory state (Socket.io)** | Ephemeral live session data; does not require persistence |
 
-## Setup
+---
 
-Run the API and frontend in separate terminals.
+## Demo Accounts & RBAC Matrix
 
-**Backend** (`http://localhost:4000`):
+Password for all demo accounts: **`CollabBoard!1`**
+
+| Email | Name | Org Role | Workspace Role (`ws-website`) | Accessible Tree Scope |
+|---|---|---|---|---|
+| `ada@collabboard.local` | Ada Lovelace | `senior_project_manager` | `owner` | Full tree across **all** workspaces |
+| `grace@collabboard.local` | Grace Hopper | `project_manager` | `project_manager` | Full tree on assigned workspaces; can manage members |
+| `linus@collabboard.local` | Linus Torvalds | `developer` | `developer` | **Scoped:** Engineering nodes only (`tn-engineering`, `tn-api`, `tn-frontend`) |
+| `barbara@collabboard.local`| Barbara Liskov | `designer` | `designer` | Full tree on assigned workspaces |
+| `dennis@collabboard.local` | Dennis Ritchie | `qa` | `qa` | Full tree on assigned workspaces |
+| `tim@collabboard.local`    | Tim Berners-Lee | `stakeholder` | `viewer` | Read-only access; cannot chat or move cards |
+
+---
+
+## Getting Started
+
+Run the backend API and frontend Next.js application in separate terminals.
+
+### 1. Backend Setup (`:4000`)
 
 ```bash
 cd backend
-cp .env.example .env   # then set real MONGODB_URI (Atlas, DB name collabboard)
+cp .env.example .env
 npm install
-npm run seed           # upsert demo data into Atlas (idempotent)
+```
+
+Configure `backend/.env`:
+
+```env
+PORT=4000
+NODE_ENV=development
+JWT_SECRET=your-secure-jwt-secret-string-at-least-32-chars
+CLIENT_ORIGIN=http://localhost:3000
+
+# MongoDB Atlas Connection URI (append database name /collabboard)
+MONGODB_URI=mongodb+srv://<USER>:<PASSWORD>@<CLUSTER>.mongodb.net/collabboard?retryWrites=true&w=majority
+
+# UploadThing API Token (from https://uploadthing.com/dashboard)
+UPLOADTHING_TOKEN=your-uploadthing-token
+```
+
+Seed initial demo data into MongoDB:
+
+```bash
+npm run seed
+```
+
+Start the backend development server:
+
+```bash
 npm run dev
 ```
 
-Required `.env` in `backend/` (never commit secrets):
+The API will listen on `http://localhost:4000`. Health check: `http://localhost:4000/api/health`.
 
-| Variable | Default / notes |
-|---|---|
-| `PORT` | `4000` |
-| `JWT_SECRET` | `replace-me-in-real-env` |
-| `CLIENT_ORIGIN` | `http://localhost:3000` |
-| `MONGODB_URI` | Atlas URI with `/collabboard?retryWrites=true&w=majority` |
-
-Data survives API restarts. Re-run `npm run seed` anytime to refresh demo ids (`u-ada`, `ws-website`, …).
-
-**Frontend** (`http://localhost:3000`):
+### 2. Frontend Setup (`:3000`)
 
 ```bash
 cd frontend
@@ -78,71 +134,64 @@ npm install
 npm run dev
 ```
 
-Optional: set `NEXT_PUBLIC_API_URL` in `frontend/.env.local` if the API is not on `http://localhost:4000`.
+Open [http://localhost:3000](http://localhost:3000).
 
-Open [http://localhost:3000](http://localhost:3000). `/` redirects to `/dashboard`. Sign in at `/login`.
+---
 
-**Demo login:** `ada@collabboard.local` / `CollabBoard!1`
+## End-to-End Demo Walkthrough
+
+1. **Sign In**: Navigate to `/login`. Sign in as `ada@collabboard.local` with password `CollabBoard!1`.
+2. **Dashboard & Workspaces**: Observe the list of workspaces. Member avatars are dynamically resolved from the API.
+3. **Create Workspace**: Click **+ New Workspace** in the top bar or sidebar, assign a name, description, and accent color.
+4. **Work Tree**: Click the workspace to view the hierarchical tree (`/workspace/[id]/tree`). Inspect task counts, completion percentages, and add/edit nodes.
+5. **Kanban Board & DnD**: Switch to the **Board** tab (`/workspace/[id]/board`). Drag a task between columns (`todo`, `in_progress`, `review`, `done`). Optimistic locking verifies `version` and returns 409 conflict on concurrent updates.
+6. **Task Detail Drawer**: Click any task card to slide open the Task Detail Drawer.
+   - Switch between **Messages** and **Attachments**.
+   - Under **Attachments**, use the UploadThing button to upload real images or documents.
+7. **Realtime Chat & Presence**:
+   - In the workspace header, click **Workspace Chat** to open the slide-out chat panel.
+   - Send messages in real-time. Active online users are displayed with pulsing indicators.
+8. **RBAC Scope Verification**:
+   - Sign out and log in as `linus@collabboard.local`.
+   - Open `ws-website`: notice that only engineering nodes (`tn-engineering`, `tn-api`, `tn-frontend`) appear in the tree and board. Design and marketing nodes are restricted.
+
+---
+
+## Testing & Quality
+
+### Backend Tests (In-Memory MongoDB)
+Backend tests run against an isolated in-memory MongoDB server (`mongodb-memory-server`), ensuring zero pollution and zero dependence on external Atlas connectivity:
 
 ```bash
-cd frontend && npm run build
-cd backend && npm test
+cd backend
+npm test
 ```
 
-## Stack
+### Frontend Tests (React Testing Library)
+Frontend component and authentication tests run via Vitest/Jest:
 
-| Layer | Tech |
-|---|---|
-| Frontend | Next.js 16 (App Router), TypeScript, Tailwind CSS, `lucide-react` — import alias `@/*` |
-| Backend | Node.js 20+, Express, JWT, Zod, Mongoose → MongoDB Atlas |
-| Database | MongoDB Atlas (`collabboard`) |
-| API contract | OpenAPI 3.0, Swagger UI, Postman collection |
-
-Frontend HTTP client: `frontend/lib/api.ts`.
-
-## API
-
-**Base URL:** `http://localhost:4000/api`
-
-All JSON responses use a uniform envelope:
-
-```json
-{ "success": true, "data": { ... } }
+```bash
+cd frontend
+npm test
 ```
 
-```json
-{ "success": false, "error": { "code": "...", "message": "..." } }
+### Production Build Verification
+```bash
+cd frontend
+npm run build
 ```
 
-**Auth:** `POST /auth/register`, `POST /auth/login`, `GET /auth/me`, `POST /auth/logout`
+---
 
-**Resources:** CRUD for workspaces, tree nodes, tasks, messages, and attachment metadata. Tasks move between four frozen Kanban columns via `PATCH /tasks/:taskId/move`. Gantt rows are **derived** from `startDate` / `dueDate` (`leftPercent`, `widthPercent`) — not stored. Workspace-scoped mutations require membership. Input is validated with Zod at the route edge.
+## API & Documentation
 
-**Health:** `GET /api/health` reports `store: "mongo"` and mongoose connection state.
+- **Swagger UI**: [http://localhost:4000/api/docs](http://localhost:4000/api/docs)
+- **OpenAPI 3.0 Spec**: [`docs/api/openapi.yaml`](./docs/api/openapi.yaml)
+- **Postman Collection**: [`postman/CollabBoard.postman_collection.json`](./postman/CollabBoard.postman_collection.json)
+- **Postman Environment**: [`postman/CollabBoard.postman_environment.json`](./postman/CollabBoard.postman_environment.json)
 
-Seed ids match the frontend mocks (`task-01`, `ws-website`, …).
-
-## Frontend routes
-
-| Route | Description |
-|---|---|
-| `/login` | JWT sign-in |
-| `/dashboard` | Workspace list |
-| `/workspace/[id]/tree` | Work tree |
-| `/workspace/[id]/board` | Kanban board |
-| `/workspace/[id]/gantt` | Gantt chart |
-
-Task detail opens as a drawer from tree or board views.
-
-## API docs
-
-- Swagger UI: [http://localhost:4000/api/docs](http://localhost:4000/api/docs)
-- [docs/api/openapi.yaml](./docs/api/openapi.yaml)
-- [docs/api/API-REFERENCE.md](./docs/api/API-REFERENCE.md)
-- Postman: [postman/CollabBoard.postman_collection.json](./postman/CollabBoard.postman_collection.json) + [postman/CollabBoard.postman_environment.json](./postman/CollabBoard.postman_environment.json)
-
-Import the collection and environment, select **CollabBoard Local**, run **Auth → Login (Ada)** first (saves `token`), then exercise other folders. Newman: `npm run test:postman` from `backend/`.
-
-## Limitations
-
-Jest still resets the legacy in-memory store (`memory.store.js`) until Member 8 moves tests to `mongodb-memory-server` — expect test failures against Mongo repos. Out of scope until later members: Socket.io / live presence, UploadThing uploads, RBAC UI, and Next.js `app/api` routes (Express is the API).
+Run Newman collection tests:
+```bash
+cd backend
+npm run test:postman
+```

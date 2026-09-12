@@ -248,6 +248,17 @@ async function remove(workspaceId) {
       await Attachment.deleteMany({ taskId: { $in: taskIds } });
     }
 
+    const store = getStore();
+    if (store && store.workspaces) {
+      const idx = store.workspaces.findIndex((w) => w.id === workspaceId);
+      if (idx !== -1) store.workspaces.splice(idx, 1);
+      const taskIdSet = new Set(taskIds);
+      store.treeNodes = store.treeNodes.filter((n) => n.workspaceId !== workspaceId);
+      store.tasks = store.tasks.filter((t) => t.workspaceId !== workspaceId);
+      store.messages = store.messages.filter((m) => !taskIdSet.has(m.taskId));
+      store.attachments = store.attachments.filter((a) => !taskIdSet.has(a.taskId));
+    }
+
     return normalizeWorkspace(ws);
   }
 

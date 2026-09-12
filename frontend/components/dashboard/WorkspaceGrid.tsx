@@ -3,10 +3,15 @@
 import { useRouter } from "next/navigation";
 import { WorkspaceCard } from "@/components/dashboard/WorkspaceCard";
 import { getUsers } from "@/lib/format";
-import { users } from "@/mocks/data";
-import type { Workspace } from "@/types";
+import type { Workspace, User } from "@/types";
 
-export function WorkspaceGrid({ items }: { items: Workspace[] }) {
+export function WorkspaceGrid({
+  items,
+  users = [],
+}: {
+  items: Workspace[];
+  users?: User[];
+}) {
   const router = useRouter();
 
   if (items.length === 0) {

@@ -49,6 +49,49 @@ components:
           type: string
         avatarColor:
           type: string
+        orgRole:
+          type: string
+          enum: [senior_project_manager, project_manager, developer, designer, qa, stakeholder, admin]
+        title:
+          type: string
+        bio:
+          type: string
+        avatarUrl:
+          type: string
+    WorkspaceMember:
+      type: object
+      properties:
+        userId:
+          type: string
+        role:
+          type: string
+          enum: [owner, project_manager, developer, designer, qa, viewer]
+        visibleTreeNodeIds:
+          type: array
+          items:
+            type: string
+    WorkspaceChatMessage:
+      type: object
+      properties:
+        id:
+          type: string
+        workspaceId:
+          type: string
+        authorId:
+          type: string
+        text:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        author:
+          type: object
+          properties:
+            id: { type: string }
+            name: { type: string }
+            email: { type: string }
+            avatarColor: { type: string }
+            avatarUrl: { type: string, nullable: true }
     Workspace:
       type: object
       properties:
@@ -58,12 +101,18 @@ components:
           type: string
         description:
           type: string
+        color:
+          type: string
+        ownerId:
+          type: string
         memberIds:
           type: array
           items:
             type: string
-        color:
-          type: string
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkspaceMember'
     TreeNode:
       type: object
       properties:
@@ -626,3 +675,121 @@ paths:
       responses:
         '200':
           description: Success
+  /users/me:
+    get:
+      summary: Get current authenticated user profile
+      responses:
+        '200':
+          description: Current user profile
+    patch:
+      summary: Update current user profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+                bio: { type: string }
+                avatarUrl: { type: string }
+                avatarColor: { type: string }
+      responses:
+        '200':
+          description: Profile updated
+  /workspaces/{workspaceId}/chat:
+    get:
+      summary: List workspace live chat messages
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of workspace chat messages
+    post:
+      summary: Post message to workspace live chat
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string }
+      responses:
+        '201':
+          description: Chat message created
+  /workspaces/{workspaceId}/members/{userId}:
+    patch:
+      summary: Update workspace member role and visible tree node scope
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role:
+                  type: string
+                  enum: [owner, project_manager, developer, designer, qa, viewer]
+                visibleTreeNodeIds:
+                  type: array
+                  items: { type: string }
+      responses:
+        '200':
+          description: Member role updated
+    delete:
+      summary: Remove member from workspace
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Member removed
+  /uploadthing:
+    post:
+      summary: UploadThing Express adapter endpoint for task file attachments
+      description: Mount point for createRouteHandler with taskAttachment FileRoute. Accepts multipart uploads for images and documents tagged with taskId.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Upload complete; Attachment document created in MongoDB
+

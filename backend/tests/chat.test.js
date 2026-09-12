@@ -1,10 +1,11 @@
 const request = require("supertest");
 const app = require("../src/app");
-const { reset, getStore } = require("../src/store/memory.store");
+const { clearTestDb, seedTestDb } = require("./helpers/db");
 const { loginAda, loginLinus, loginAs } = require("./helpers/auth");
 
-beforeEach(() => {
-  reset();
+beforeEach(async () => {
+  await clearTestDb();
+  await seedTestDb();
 });
 
 describe("Workspace Chat API (Member 7B)", () => {
@@ -76,27 +77,7 @@ describe("Workspace Chat API (Member 7B)", () => {
     });
 
     it("returns 403 when user with 'viewer' role tries to post", async () => {
-      const store = getStore();
-      const ws = store.workspaces.find((w) => w.id === workspaceId);
-      expect(ws).toBeDefined();
-
-      // Add a viewer member to the workspace
-      const viewerUser = store.users.find((u) => u.id === "u-margaret");
-      expect(viewerUser).toBeDefined();
-
-      // Ensure margaret has role 'viewer' in workspace
-      ws.members = ws.members || [];
-      const existingMember = ws.members.find((m) => m.userId === "u-margaret");
-      if (existingMember) {
-        existingMember.role = "viewer";
-      } else {
-        ws.members.push({ userId: "u-margaret", role: "viewer" });
-        if (ws.memberIds && !ws.memberIds.includes("u-margaret")) {
-          ws.memberIds.push("u-margaret");
-        }
-      }
-
-      const token = await loginAs(app, viewerUser.email, "CollabBoard!1");
+      const token = await loginAs(app, "tim@collabboard.local", "CollabBoard!1");
 
       const res = await request(app)
         .post(`/api/workspaces/${workspaceId}/chat`)

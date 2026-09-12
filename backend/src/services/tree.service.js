@@ -154,7 +154,7 @@ async function listTree(workspaceId, userOrId) {
   // Get tasks to recompute completion
   let tasks = [];
   try {
-    tasks = taskRepo.findByWorkspace(workspaceId) || [];
+    tasks = (await taskRepo.findByWorkspace(workspaceId)) || [];
   } catch {
     tasks = [];
   }

@@ -23,6 +23,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [allUsers, setAllUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
 
   // New Workspace Modal State
@@ -41,12 +42,14 @@ export default function DashboardPage() {
     }
 
     try {
-      const [wsData, meData] = await Promise.all([
+      const [wsData, meData, usersData] = await Promise.all([
         apiFetch<Workspace[]>("/api/workspaces", { token }),
         apiFetch<User>("/api/auth/me", { token }).catch(() => null),
+        apiFetch<User[]>("/api/users", { token }).catch(() => []),
       ]);
       setWorkspaces(wsData);
       setCurrentUser(meData);
+      setAllUsers(usersData || []);
     } catch (err) {
       console.error("Failed to load dashboard data:", err);
       router.replace("/login");
@@ -57,6 +60,12 @@ export default function DashboardPage() {
 
   useEffect(() => {
     loadData();
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get("new") === "1" || urlParams.get("new") === "true") {
+        setIsModalOpen(true);
+      }
+    }
   }, [router]);
 
   if (loading) {
@@ -133,7 +142,7 @@ export default function DashboardPage() {
           )}
         </div>
 
-        <WorkspaceGrid items={workspaces} />
+        <WorkspaceGrid items={workspaces} users={allUsers} />
 
         {/* Create Workspace Modal */}
         {isModalOpen && (

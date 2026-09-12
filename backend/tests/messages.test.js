@@ -1,10 +1,12 @@
 const request = require("supertest");
 const app = require("../src/app");
-const { reset, getStore } = require("../src/store/memory.store");
+const { clearTestDb, seedTestDb } = require("./helpers/db");
+const { getStore } = require("../src/store/memory.store");
 const { loginAda, loginAs } = require("./helpers/auth");
 
-beforeEach(() => {
-  reset();
+beforeEach(async () => {
+  await clearTestDb();
+  await seedTestDb();
 });
 
 // Helper: get a task that has messages in seed

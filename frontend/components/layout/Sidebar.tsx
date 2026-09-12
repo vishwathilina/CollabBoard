@@ -40,6 +40,10 @@ export function Sidebar() {
     router.push("/login");
   };
 
+  if (pathname === "/login" || pathname === "/register") {
+    return null;
+  }
+
   return (
     <aside className="sticky top-0 flex h-screen w-64 shrink-0 flex-col border-r border-border bg-surface">
       <div className="flex h-14 items-center gap-2 border-b border-border px-4">
@@ -89,8 +93,13 @@ export function Sidebar() {
         </ul>
 
         <div className="mt-4 px-1">
-          <Button variant="outline" size="sm" disabled className="w-full">
-            New workspace
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full"
+            onClick={() => router.push("/dashboard?new=1")}
+          >
+            + New workspace
           </Button>
         </div>
       </nav>
