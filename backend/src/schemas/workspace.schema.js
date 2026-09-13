@@ -6,8 +6,8 @@ const workspaceRoles = ["owner", "project_manager", "developer", "designer", "qa
 
 const workspaceCreateSchema = z.object({
   name: z.string().min(1, "name is required").trim(),
-  description: z.string().min(1, "description is required").trim(),
-  color: hexColor,
+  description: z.string().trim().optional().default(""),
+  color: hexColor.optional().default("#C6F135"),
 });
 
 const workspacePatchSchema = z
