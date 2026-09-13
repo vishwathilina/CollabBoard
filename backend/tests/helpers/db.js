@@ -1,9 +1,25 @@
+const fs = require("fs");
 const mongoose = require("mongoose");
 const { MongoMemoryServer } = require("mongodb-memory-server");
 const { seedMongo } = require("../../src/store/seedMongo");
 const { reset: resetMemoryStore } = require("../../src/store/memory.store");
 
 let mongoServer = null;
+
+if (process.platform === "win32" && !process.env.MONGOMS_SYSTEM_BINARY) {
+  const possiblePaths = [
+    "C:\\Program Files\\MongoDB\\Server\\8.2\\bin\\mongod.exe",
+    "C:\\Program Files\\MongoDB\\Server\\8.0\\bin\\mongod.exe",
+    "C:\\Program Files\\MongoDB\\Server\\7.0\\bin\\mongod.exe",
+    "C:\\Program Files\\MongoDB\\Server\\6.0\\bin\\mongod.exe",
+  ];
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      process.env.MONGOMS_SYSTEM_BINARY = p;
+      break;
+    }
+  }
+}
 
 /**
  * Starts in-memory MongoDB instance and connects Mongoose.

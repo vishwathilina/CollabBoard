@@ -22,6 +22,20 @@ export function ClientGuard({ children }: { children: React.ReactNode }) {
     }
   }, [pathname, router]);
 
+  // Handle mid-session token expiration / 401 events
+  useEffect(() => {
+    function handleAuthExpired() {
+      if (!PUBLIC_PATHS.includes(pathname)) {
+        router.replace("/login");
+      }
+    }
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("collabboard-auth-expired", handleAuthExpired);
+      return () => window.removeEventListener("collabboard-auth-expired", handleAuthExpired);
+    }
+  }, [pathname, router]);
+
   // Don't render until client-side hydration is complete
   if (!mounted) {
     return null;

@@ -108,7 +108,7 @@ export function AttachmentList({ taskId }: AttachmentListProps) {
           }}
           appearance={{
             button:
-              "ut-ready:bg-accent ut-uploading:cursor-not-allowed bg-accent text-accent-fg text-xs font-semibold px-3 py-2 rounded-lg hover:opacity-90 transition-opacity",
+              "ut-ready:bg-accent ut-uploading:cursor-not-allowed bg-accent !text-on-accent ut-ready:!text-on-accent ut-uploading:!text-on-accent text-xs font-semibold px-3 py-2 rounded-lg hover:opacity-90 transition-opacity",
             allowedContent: "text-[11px] text-muted mt-1",
           }}
         />

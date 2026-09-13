@@ -23,3 +23,9 @@ body {
 body {
   font-family: var(--font-inter), Inter, system-ui, sans-serif;
 }
+
+/* UploadThing button text override for high contrast against neon accent */
+[data-ut-element="button"],
+[data-ut-element="button"] * {
+  color: #0b0d10 !important;
+}
