@@ -36,14 +36,23 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
   const showToast = useCallback(
     (message: string, type: ToastType = "info", durationMs = 4500) => {
-      const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-      setToasts((prev) => [...prev, { id, message, type }]);
+      setToasts((prev) => {
+        // Prevent stacking duplicate toasts
+        if (prev.some((t) => t.message === message && t.type === type)) {
+          return prev;
+        }
 
-      if (durationMs > 0) {
-        setTimeout(() => {
-          removeToast(id);
-        }, durationMs);
-      }
+        const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+        if (durationMs > 0) {
+          setTimeout(() => {
+            removeToast(id);
+          }, durationMs);
+        }
+
+        // Limit maximum concurrent visible toasts to 4
+        const next = [...prev, { id, message, type }];
+        return next.length > 4 ? next.slice(next.length - 4) : next;
+      });
     },
     [removeToast]
   );

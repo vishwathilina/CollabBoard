@@ -19,10 +19,46 @@ export class ApiError extends Error {
   }
 }
 
-// Ensure token is retrieved safely on client side
+/**
+ * Safely checks whether a JWT token string has expired based on its payload `exp` claim.
+ * Non-JWT tokens (e.g. test mocks) or tokens without `exp` are treated as non-expired.
+ */
+export function isTokenExpired(token: string): boolean {
+  if (!token) return true;
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) {
+      return false;
+    }
+    let base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    while (base64.length % 4) {
+      base64 += "=";
+    }
+    const decoded =
+      typeof atob === "function"
+        ? atob(base64)
+        : Buffer.from(base64, "base64").toString("binary");
+    const payload = JSON.parse(decoded);
+    if (typeof payload.exp === "number") {
+      return Date.now() >= payload.exp * 1000;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+// Ensure token is retrieved safely on client side, automatically clearing expired tokens
 export function getToken(): string | null {
   if (typeof window !== "undefined") {
-    return localStorage.getItem("collabboard_token");
+    const token = localStorage.getItem("collabboard_token");
+    if (token) {
+      if (isTokenExpired(token)) {
+        removeToken();
+        return null;
+      }
+      return token;
+    }
   }
   return null;
 }
@@ -31,6 +67,7 @@ export function setToken(token: string) {
   if (typeof window !== "undefined") {
     localStorage.setItem("collabboard_token", token);
   }
+  lastAuthToastTime = 0;
 }
 
 export function removeToken() {
@@ -43,6 +80,13 @@ export function getUploadThingUrl(): string {
   return `${API_URL}/api/uploadthing`;
 }
 
+let lastAuthToastTime = 0;
+const AUTH_TOAST_THROTTLE_MS = 5000;
+
+export function resetAuthToastThrottle() {
+  lastAuthToastTime = 0;
+}
+
 function notifyErrorToast(status: number, message: string) {
   if (typeof window === "undefined") return;
 
@@ -50,7 +94,12 @@ function notifyErrorToast(status: number, message: string) {
   let toastMsg = message;
 
   if (status === 401) {
-    toastMsg = message || "Authentication required. Please sign in.";
+    const now = Date.now();
+    if (now - lastAuthToastTime < AUTH_TOAST_THROTTLE_MS) {
+      return; // Deduplicate repeated auth toasts within throttle window
+    }
+    lastAuthToastTime = now;
+    toastMsg = "Session expired. Please sign in again.";
   } else if (status === 403) {
     toastMsg = message || "Forbidden: You do not have permission for this action.";
   } else if (status === 409) {
@@ -88,8 +137,24 @@ export async function apiFetch<T>(path: string, options: FetchOptions = {}): Pro
   if (!response.ok || (body && body.success === false)) {
     const message = body?.error?.message || `API request failed with status ${response.status}`;
     
-    // Consistent toasts for 401/403/409 unless explicitly suppressed
-    if (!silentToast && (response.status === 401 || response.status === 403 || response.status === 409)) {
+    if (response.status === 401) {
+      // Clear expired / invalid token
+      removeToken();
+
+      // Notify auth state listeners to redirect to login
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("collabboard-auth-expired"));
+      }
+
+      if (!silentToast) {
+        notifyErrorToast(response.status, message);
+      }
+
+      throw new ApiError(response.status, message, body?.error?.code, body?.error?.details);
+    }
+
+    // Consistent toasts for 403/409 unless explicitly suppressed
+    if (!silentToast && (response.status === 403 || response.status === 409)) {
       notifyErrorToast(response.status, message);
     }
 

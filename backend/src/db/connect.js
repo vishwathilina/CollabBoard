@@ -1,5 +1,14 @@
+const dns = require("dns");
 const mongoose = require("mongoose");
 const env = require("../config/env");
+
+if (process.platform === "win32") {
+  try {
+    dns.setServers(["8.8.8.8", "1.1.1.1"]);
+  } catch {
+    // ignore if cannot set servers
+  }
+}
 
 async function connectDb() {
   const uri = env.MONGODB_URI;
